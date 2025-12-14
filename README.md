@@ -103,6 +103,19 @@ The system functions autonomously day after day:
    - Check active positions
    - Review AI predictions and signals
 
+## ✅ System Status
+
+After completing the initial run, your system will have:
+- ✅ Database initialized with all tables
+- ✅ 51 Nifty 50 stocks synced
+- ✅ Watchlist populated
+- ✅ 1 year of historical market data
+- ✅ Technical indicators calculated
+- ✅ Macro indicators (VIX, Crude, USD/INR) updated
+- ✅ ML features generated for all stocks
+
+**Next Steps**: Train a model and start generating predictions!
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -114,7 +127,7 @@ The system functions autonomously day after day:
 
 1. **Clone or navigate to the project directory**
 
-2. **Install dependencies using uv**:
+2. **Install dependencies using uv** (recommended):
    ```bash
    uv sync
    ```
@@ -124,40 +137,79 @@ The system functions autonomously day after day:
    pip install -r requirements.txt
    ```
 
-3. **Initialize the database**:
+3. **Quick Start - Initialize the system**:
    ```bash
-   python init_db.py
+   # Using uv (recommended)
+   uv run python init_db.py
+   uv run python -c "from engine.loaders.profile_loader import sync_nifty_companies; sync_nifty_companies()"
+   uv run python -m utils.watchlist_init
+   uv run python -m engine.etl
+   uv run python -m ai.feature_store
    ```
 
-4. **Sync Nifty 50 companies**:
+   Or use the quick start script:
    ```bash
-   python main.py
-   # Select 'y' when prompted to sync companies
+   uv run python quick_start.py
    ```
 
-5. **Run initial data sync**:
-   ```bash
-   python orchestrator.py etl
-   ```
+### Initial Run
+
+After installation, run the initial setup to populate the database:
+
+```bash
+# 1. Initialize database
+uv run python init_db.py
+
+# 2. Sync Nifty 50 companies
+uv run python -c "from engine.loaders.profile_loader import sync_nifty_companies; sync_nifty_companies()"
+
+# 3. Initialize watchlist
+uv run python -m utils.watchlist_init
+
+# 4. Run ETL to fetch market data and calculate indicators
+uv run python -m engine.etl
+
+# 5. Generate ML features
+uv run python -m ai.feature_store
+```
+
+This will:
+- Create all database tables
+- Sync 51 Nifty 50 stocks
+- Add all stocks to watchlist
+- Fetch 1 year of historical market data
+- Calculate technical indicators (RSI, MACD, SMAs, ATR)
+- Fetch macro indicators (India VIX, Crude Oil, USD/INR)
+- Generate ML-ready features for all stocks
 
 ### Running the System
 
 #### Manual Workflows
 
+Using `uv` (recommended):
 ```bash
 # Run ETL (data collection)
-python orchestrator.py etl
+uv run python orchestrator.py etl
 
 # Run AI Inference
-python orchestrator.py inference
+uv run python orchestrator.py inference
 
 # Run Strategy Engine
-python orchestrator.py strategy
+uv run python orchestrator.py strategy
 
 # Run Execution Engine
-python orchestrator.py execute
+uv run python orchestrator.py execute
 
 # Run full workflow
+uv run python orchestrator.py all
+```
+
+Or using standard Python:
+```bash
+python orchestrator.py etl
+python orchestrator.py inference
+python orchestrator.py strategy
+python orchestrator.py execute
 python orchestrator.py all
 ```
 
@@ -165,27 +217,27 @@ python orchestrator.py all
 
 ```bash
 # Start the automated scheduler (runs workflows at scheduled times)
-python orchestrator.py schedule
+uv run python orchestrator.py schedule
 ```
 
 #### Dashboard
 
 ```bash
-streamlit run dashboard.py
+uv run streamlit run dashboard.py
 ```
 
 Then open your browser to `http://localhost:8501`
 
 ### Training a Model
 
-1. **Generate features for all stocks**:
+1. **Generate features for all stocks** (if not done during initial setup):
    ```bash
-   python -m ai.feature_store
+   uv run python -m ai.feature_store
    ```
 
 2. **Train a model**:
    ```bash
-   python ai/train_model.py RandomForest_Swing_v1
+   uv run python ai/train_model.py RandomForest_Swing_v1
    ```
 
 3. **Activate the model** (when prompted, or manually):
@@ -194,6 +246,30 @@ Then open your browser to `http://localhost:8501`
    registry = ModelRegistryManager()
    registry.activate_model("RandomForest_Swing_v1")
    ```
+
+### Complete Workflow Example
+
+After initial setup, here's a typical workflow:
+
+```bash
+# 1. Daily ETL (fetch latest market data)
+uv run python -m engine.etl
+
+# 2. Generate/update features
+uv run python -m ai.feature_store
+
+# 3. Run AI inference (requires trained model)
+uv run python -m ai.inference
+
+# 4. Generate trade signals
+uv run python -m strategies.engine
+
+# 5. Execute trades (paper trading mode)
+uv run python -m execution.executor
+
+# 6. View results in dashboard
+uv run streamlit run dashboard.py
+```
 
 ## 📁 Project Structure
 
