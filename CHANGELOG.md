@@ -1,18 +1,142 @@
 # Changelog
 
-All notable changes to the Nifty 50 AI Swing Trader project will be documented in this file.
+All notable changes to the Indian Stock Analysis - Multi-Index AI Swing Trader project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Multi-Index Support** (2025-12-14)
+  - Complete support for 54+ NSE indices (Nifty 50, 100, 500, Sectoral, Thematic, Strategy indices)
+  - Index model in database with company-index relationships
+  - Index-specific watchlists (stocks can belong to multiple indices)
+  - Index-specific strategies (strategies can be configured per index)
+  - Index selector in dashboard sidebar (filters all views by selected index)
+  - Index management section in Control Center
+  - Comprehensive NSE index discovery utility (`utils/discover_nse_indices.py`)
+  - Index sync functionality for all available indices
+  - Support for 28 confirmed available indices on NSE
+
+- **Index Management Features** (2025-12-14)
+  - "Create All NSE Indices" button in dashboard (creates 54+ indices)
+  - Multi-select index sync (sync companies for selected indices)
+  - "Sync All Indices" bulk operation
+  - Index-specific company assignment
+  - Progress tracking for index sync operations
+  - Results display showing new companies and assignments per index
+
+- **Strategies Page** (2025-12-14)
+  - New "Strategies" page in dashboard
+  - View all available strategies with detailed documentation
+  - Add/Edit strategy documentation including:
+    - How it works
+    - Entry/Exit conditions
+    - Risk management approach
+    - Recommended timeframe
+    - Risk level assessment
+    - Index assignment
+  - Auto-populate section for discovered strategies without documentation
+  - Index-filtered strategy view
+
+- **NSE Index Discovery** (2025-12-14)
+  - Comprehensive index list with 54+ indices
+  - Automatic URL generation for NSE CSV files
+  - Index availability checking (tests which indices have CSV files on NSE)
+  - Support for Benchmark, Market Cap, Sectoral, Thematic, and Strategy indices
+  - Dynamic URL generation for unknown index patterns
+
+- **Backtesting Module** (2025-12-14)
+  - Complete backtesting engine for strategy performance evaluation
+  - Historical data simulation with realistic trade execution
+  - Performance metrics calculation (win rate, profit factor, drawdown, etc.)
+  - Support for testing individual strategies or comparing all strategies
+  - Backtest results storage in database
+  - Dashboard integration with backtesting UI
+  - Trade-by-trade analysis and visualization
+  - P&L charts and performance breakdowns
+  - Historical backtest results viewing
+  - Comprehensive metrics explanation in dashboard
+
+### Changed
+- **Profile Loader** (`engine/loaders/profile_loader.py`)
+  - Renamed `sync_nifty_companies()` to `sync_index_companies()` for multi-index support
+  - Added comprehensive index URL mapping (54+ indices)
+  - Added `sync_all_indices()` function for bulk operations
+  - Dynamic URL generation for indices not in mapping
+  - Improved error handling and logging
+
+- **Watchlist System** (`utils/watchlist_init.py`)
+  - Updated to support index-specific watchlists
+  - `initialize_watchlist()` now accepts `index_name` parameter
+  - Watchlists are now per-index (same stock can be in multiple index watchlists)
+
+- **Strategy Engine** (`strategies/engine.py`)
+  - Added index filtering support
+  - Can run strategies for specific index only
+  - Filters watchlist and strategies by selected index
+  - Accepts optional `index_name` parameter
+
+- **Dashboard** (`dashboard.py`)
+  - Added index selector in sidebar (filters all pages)
+  - Updated Watchlist page to show index-specific watchlists
+  - Added "Strategies" page with strategy documentation management
+  - Added "Index Management" section in Control Center
+  - Updated all pages to respect selected index filter
+  - Strategy Engine controls now use selected index
+
+- **Database Models** (`database/models.py`)
+  - Added `Index` model for stock indices
+  - Added `company_index_mapping` junction table (many-to-many relationship)
+  - Updated `Watchlist` to include `index_id` (index-specific watchlists)
+  - Updated `StrategyMetadata` to include `index_id` (index-specific strategies)
+  - Added relationships between companies and indices
+
+### Fixed
+- **Backtesting Capital Tracking Bug** (2025-12-14)
+  - Fixed incorrect net profit calculation in backtesting engine
+  - Capital was incorrectly deducted when opening positions
+  - Now properly tracks `capital_used` and returns it along with P&L on position close
+  - Net profit now correctly reflects actual trading performance
+
+- **Database Migration Issues** (2025-12-14)
+  - Added migration script to add missing `quantity` column to `trade_signals` table
+  - Added migration script to add `priority` and `reasoning` columns
+  - Created migration for index support (`migrations/add_index_support.py`)
+  - Created migration utilities for future schema updates
+  - Updated `init_db.py` with better table counting and migration notes
+
+### Technical Details
+
+#### Multi-Index Architecture
+- Companies can belong to multiple indices (many-to-many relationship)
+- Watchlists are index-specific (same stock can be tracked in multiple index watchlists)
+- Strategies can be configured per index with different parameters
+- Strategy Engine can filter by index for targeted analysis
+- All dashboard views respect index selection
+
+#### Index Sync System
+- Automatic discovery of available NSE indices
+- URL pattern matching for NSE CSV files
+- Availability checking (tests which indices have CSV files)
+- Bulk sync operations with progress tracking
+- Error handling for unavailable indices
+
+#### Supported Indices
+- **28 confirmed available** indices with CSV files on NSE
+- **54+ total indices** defined in system (some may have different URL patterns)
+- Categories: Benchmark, Market Cap, Sectoral, Thematic, Strategy
+- Easy to add more indices by updating `nse_index_discovery.py`
+
 ### Planned
 - Live trading broker integration
-- Advanced backtesting framework
+- Advanced backtesting framework with walk-forward analysis
 - Real-time portfolio rebalancing
 - Email/SMS notifications for trades
 - Multi-timeframe analysis support
+- Index performance comparison tools
+- Sector rotation strategies
 
 ## [0.1.0] - 2025-12-14
 

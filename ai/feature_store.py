@@ -6,18 +6,20 @@ import pandas as pd
 import numpy as np
 from database.models import (
     SessionLocal, MarketData, TechnicalIndicators, 
-    FundamentalData, MacroIndicator, FeatureStore, CompanyProfile
+    FundamentalData, MacroIndicator, FeatureStore, CompanyProfile, Watchlist, Index
 )
 from sqlalchemy import select, func
 from loguru import logger
 from datetime import datetime, timedelta
+from typing import Optional
 import pandas_ta as ta
 
 class FeatureStoreEngine:
     """Transforms raw market data into ML features"""
     
-    def __init__(self):
+    def __init__(self, index_id: Optional[int] = None):
         self.session = SessionLocal()
+        self.index_id = index_id
     
     def generate_features(self, ticker: str, lookback_days: int = 60):
         """Generate features for a specific ticker"""
@@ -172,23 +174,45 @@ class FeatureStoreEngine:
         return pd.Series(features)
     
     def generate_all_features(self):
-        """Generate features for all active watchlist stocks"""
-        logger.info("🔧 Generating features for all stocks...")
+        """Generate features for watchlist stocks (filtered by index if specified)"""
+        index_name = None
+        if self.index_id:
+            index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+            index_name = index.display_name if index else None
         
-        # Get watchlist companies
-        from database.models import Watchlist
-        watchlist_tickers = self.session.scalars(
-            select(Watchlist.ticker).filter_by(is_active=True)
-        ).all()
+        logger.info(f"🔧 Generating features{' for ' + index_name if index_name else ' for all stocks'}...")
         
-        if watchlist_tickers:
+        # Get watchlist companies, filtered by index if specified
+        if self.index_id:
             watchlist = self.session.scalars(
-                select(CompanyProfile).filter(CompanyProfile.ticker.in_(watchlist_tickers))
+                select(Watchlist).filter_by(is_active=True, index_id=self.index_id)
             ).all()
+            if not watchlist:
+                # Fallback: get companies from index
+                index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+                if index:
+                    companies = index.companies
+                else:
+                    companies = []
+            else:
+                tickers = [w.ticker for w in watchlist]
+                companies = self.session.scalars(
+                    select(CompanyProfile).filter(CompanyProfile.ticker.in_(tickers))
+                ).all()
         else:
-            watchlist = self.session.scalars(select(CompanyProfile)).all()
+            # Get all active watchlist
+            watchlist_tickers = self.session.scalars(
+                select(Watchlist.ticker).filter_by(is_active=True)
+            ).all()
+            
+            if watchlist_tickers:
+                companies = self.session.scalars(
+                    select(CompanyProfile).filter(CompanyProfile.ticker.in_(watchlist_tickers))
+                ).all()
+            else:
+                companies = self.session.scalars(select(CompanyProfile)).all()
         
-        for company in watchlist:
+        for company in companies:
             self.generate_features(company.ticker)
         
         self.session.close()

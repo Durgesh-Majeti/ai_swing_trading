@@ -24,12 +24,20 @@ class ExecutionEngine:
         self.risk_manager = RiskManager()
         logger.info(f"🚀 Execution Engine initialized in {mode} mode")
     
-    def process_new_signals(self):
-        """Process all NEW trade signals"""
-        logger.info("📋 Processing new trade signals...")
+    def process_new_signals(self, index_id: Optional[int] = None):
+        """Process all NEW trade signals (filtered by index if specified)"""
+        index_name = None
+        if index_id:
+            from database.models import Index
+            index = self.session.scalar(select(Index).filter_by(id=index_id))
+            index_name = index.display_name if index else None
         
-        # Get all NEW signals
+        logger.info(f"💼 Processing new trade signals{' for ' + index_name if index_name else ''}...")
+        
+        # Get all NEW signals, filtered by index if specified
         stmt = select(TradeSignal).filter_by(status="NEW").order_by(TradeSignal.created_at)
+        if index_id:
+            stmt = stmt.where(TradeSignal.index_id == index_id)
         signals = self.session.scalars(stmt).all()
         
         if not signals:
@@ -83,6 +91,7 @@ class ExecutionEngine:
             order = Order(
                 signal_id=signal.id,
                 ticker=signal.ticker,
+                index_id=signal.index_id,  # Store index_id for isolation
                 order_type="MARKET",  # Can be enhanced to support LIMIT orders
                 side=signal.signal,  # BUY or SELL
                 quantity=signal.quantity,
@@ -134,7 +143,8 @@ class ExecutionEngine:
         if order.status != "FILLED":
             return
         
-        stmt = select(Portfolio).filter_by(ticker=order.ticker)
+        # Filter by both ticker and index_id for complete isolation
+        stmt = select(Portfolio).filter_by(ticker=order.ticker, index_id=order.index_id)
         position = self.session.scalars(stmt).first()
         
         if order.side == "BUY":
@@ -149,9 +159,10 @@ class ExecutionEngine:
                 position.target_price = order.target_price
                 position.last_updated = datetime.now()
             else:
-                # Create new position
+                # Create new position with index_id
                 position = Portfolio(
                     ticker=order.ticker,
+                    index_id=order.index_id,  # Store index_id for isolation
                     quantity=order.quantity,
                     avg_entry_price=order.filled_price,
                     current_price=order.filled_price,

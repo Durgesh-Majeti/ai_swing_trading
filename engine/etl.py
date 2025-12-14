@@ -6,23 +6,30 @@ Wakes up at specific times to collect data from various sources.
 import yfinance as yf
 from database.models import (
     SessionLocal, CompanyProfile, MarketData, FundamentalData, 
-    MacroIndicator, Watchlist, TechnicalIndicators
+    MacroIndicator, Watchlist, TechnicalIndicators, Index
 )
 from sqlalchemy import select, func
 from loguru import logger
 import pandas as pd
 from datetime import datetime, date
+from typing import Optional
 import pandas_ta as ta
 
 class ETLModule:
     """Main ETL orchestrator"""
     
-    def __init__(self):
+    def __init__(self, index_id: Optional[int] = None):
         self.session = SessionLocal()
+        self.index_id = index_id
     
     def run_full_sync(self):
         """Run complete data sync"""
-        logger.info("🚀 Starting Full ETL Pipeline...")
+        index_name = None
+        if self.index_id:
+            index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+            index_name = index.display_name if index else None
+        
+        logger.info(f"🚀 Starting Full ETL Pipeline{' for ' + index_name if index_name else ''}...")
         
         try:
             # 1. Sync Market Data
@@ -45,20 +52,35 @@ class ETLModule:
             self.session.close()
     
     def sync_market_data(self):
-        """Fetch daily OHLCV data for all watchlist stocks"""
+        """Fetch daily OHLCV data for watchlist stocks (filtered by index if specified)"""
         logger.info("📈 Syncing Market Data...")
         
-        # Get active watchlist
-        watchlist = self.session.scalars(
-            select(Watchlist).filter_by(is_active=True)
-        ).all()
-        
-        if not watchlist:
-            # If no watchlist, sync all Nifty 50
-            companies = self.session.scalars(select(CompanyProfile)).all()
-            tickers = [c.ticker for c in companies]
+        # Get active watchlist, filtered by index if specified
+        if self.index_id:
+            watchlist = self.session.scalars(
+                select(Watchlist).filter_by(is_active=True, index_id=self.index_id)
+            ).all()
+            if not watchlist:
+                # Fallback: get companies from index
+                index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+                if index:
+                    tickers = [c.ticker for c in index.companies]
+                else:
+                    tickers = []
+            else:
+                tickers = [w.ticker for w in watchlist]
         else:
-            tickers = [w.ticker for w in watchlist]
+            # Get all active watchlist
+            watchlist = self.session.scalars(
+                select(Watchlist).filter_by(is_active=True)
+            ).all()
+            
+            if not watchlist:
+                # If no watchlist, sync all companies
+                companies = self.session.scalars(select(CompanyProfile)).all()
+                tickers = [c.ticker for c in companies]
+            else:
+                tickers = [w.ticker for w in watchlist]
         
         logger.info(f"Syncing {len(tickers)} tickers...")
         
