@@ -409,6 +409,17 @@ Use the Streamlit Dashboard to:
 
 This project is for educational and research purposes. Use at your own risk.
 
+## 📋 Changelog
+
+All version updates and changes are documented in [CHANGELOG.md](CHANGELOG.md).
+
+The changelog follows the [Keep a Changelog](https://keepachangelog.com/) format and includes:
+- New features and enhancements
+- Bug fixes and corrections
+- Breaking changes
+- Technical improvements
+- Documentation updates
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please ensure:
