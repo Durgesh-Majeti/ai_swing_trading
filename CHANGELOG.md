@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Live trading broker integration
+- Advanced backtesting framework with walk-forward analysis
+- Real-time portfolio rebalancing
+- Email/SMS notifications for trades
+- Multi-timeframe analysis support
+- Index performance comparison tools
+- Sector rotation strategies
+
+## [0.2.0] - 2025-12-14
+
 ### Added
+- **Complete Index Isolation** (2025-12-14)
+  - Added `index_id` to Portfolio, TradeSignal, Order, AIPredictions tables
+  - Complete data isolation between indices
+  - Index initialization/reset utility (`utils/index_reset.py`)
+  - All operational data now properly isolated per index
+  - Migration script for index isolation (`migrations/add_index_isolation.py`)
+
+- **Workflow Synchronization with Index** (2025-12-14)
+  - ETL Module now accepts `index_id` and filters by index
+  - Feature Store now accepts `index_id` and filters by index
+  - AI Inference now accepts `index_id` and filters by index
+  - Execution Engine now filters signals by `index_id`
+  - All workflow controls in dashboard synced with selected index
+  - Full workflow runner respects selected index
+
 - **Multi-Index Support** (2025-12-14)
   - Complete support for 54+ NSE indices (Nifty 50, 100, 500, Sectoral, Thematic, Strategy indices)
   - Index model in database with company-index relationships
