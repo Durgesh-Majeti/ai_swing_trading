@@ -380,6 +380,347 @@ uv run streamlit run dashboard.py
 └── README.md               # This file
 ```
 
+## 🗄️ Database Structure
+
+The system uses a **central SQLite database** (`stock_data.db`) as the "Source of Truth" following the Hub-and-Spoke architecture. All modules communicate through this database, ensuring complete decoupling.
+
+### Database Zones
+
+The database is organized into logical zones:
+
+- **Index Zone**: Stock indices and company-index relationships
+- **Watchlist Zone**: Index-specific active stock tracking
+- **Data Zone**: Raw market data, fundamentals, technical indicators, macro indicators
+- **Intelligence Zone**: AI models, predictions, and ML features
+- **Operations Zone**: Trade signals, orders, portfolio positions, backtest results
+- **Strategy Zone**: Index-specific strategy documentation and metadata
+
+### Complete Table Schema
+
+#### **Index Zone**
+
+**`indices`** - Stock indices (Nifty 50, Nifty 100, etc.)
+- `id` (PK, Integer): Unique identifier
+- `name` (String, Unique, Indexed): Internal name (e.g., "NIFTY_50", "NIFTY_100")
+- `display_name` (String): Human-readable name (e.g., "Nifty 50")
+- `description` (Text): Index description
+- `is_active` (Boolean): Whether index is active
+- `created_at` (DateTime): Creation timestamp
+
+**`company_index_mapping`** - Many-to-many relationship between companies and indices
+- `ticker` (PK, FK → `company_profiles.ticker`): Company ticker
+- `index_id` (PK, FK → `indices.id`): Index identifier
+
+#### **Master Data Zone**
+
+**`company_profiles`** - Master company information (The Hub)
+- `ticker` (PK, String, Indexed): Stock ticker (e.g., "RELIANCE.NS")
+- `name` (String): Company name
+- `sector` (String): Business sector
+- `industry` (String): Industry classification
+- `exchange` (String): Stock exchange
+- `currency` (String): Trading currency
+- `description` (Text): Company description
+
+**Relationships:**
+- One-to-many: `market_data`, `fundamental_data`, `sentiment_data`, `ai_predictions`, `watchlist`, `orders`, `portfolio`
+- Many-to-many: `indices` (via `company_index_mapping`)
+
+#### **Data Zone**
+
+**`market_data`** - Historical OHLCV price data
+- `id` (PK, Integer, Indexed)
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `date` (DateTime, Indexed): Trading date
+- `open` (Float): Opening price
+- `high` (Float): High price
+- `low` (Float): Low price
+- `close` (Float): Closing price
+- `volume` (Integer): Trading volume
+
+**`fundamental_data`** - Financial metrics and fundamentals
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`)
+- `report_date` (Date): Financial report date
+- `pe_ratio` (Float): Price-to-Earnings ratio
+- `pb_ratio` (Float): Price-to-Book ratio
+- `market_cap` (Float): Market capitalization
+- `roe` (Float): Return on Equity
+- `eps` (Float): Earnings per Share
+- `revenue_growth` (Float): Revenue growth percentage
+- `debt_to_equity` (Float): Debt-to-Equity ratio
+
+**`technical_indicators`** - Calculated technical indicators
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`)
+- `date` (DateTime): Calculation date
+- `rsi_14` (Float): Relative Strength Index (14-period)
+- `macd` (Float): MACD line
+- `macd_signal` (Float): MACD signal line
+- `sma_50` (Float): 50-day Simple Moving Average
+- `sma_200` (Float): 200-day Simple Moving Average
+- `beta` (Float): Beta coefficient
+- `atr` (Float): Average True Range
+
+**`sentiment_data`** - News and sentiment analysis
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`)
+- `date` (DateTime): Sentiment date
+- `source` (String): Data source
+- `headline` (Text): News headline
+- `sentiment_score` (Float): Sentiment score (-1 to 1)
+- `magnitude` (Float): Sentiment magnitude
+
+**`macro_indicators`** - External economic indicators
+- `id` (PK, Integer)
+- `date` (DateTime, Indexed): Indicator date
+- `indicator_name` (String, Indexed): Name (e.g., "INDIA_VIX", "CRUDE_OIL", "USD_INR")
+- `value` (Float): Indicator value
+- `unit` (String): Unit of measurement
+
+#### **Watchlist Zone**
+
+**`watchlist`** - Index-specific active stock tracking
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `index_id` (FK → `indices.id`, Indexed): **Index isolation**
+- `added_at` (DateTime): When stock was added
+- `is_active` (Boolean): Whether entry is active
+- `notes` (Text): User notes
+
+**Note:** Same ticker can appear in multiple index watchlists.
+
+#### **Intelligence Zone**
+
+**`model_registry`** - AI model version control
+- `id` (PK, Integer)
+- `model_name` (String, Unique, Indexed): Model identifier
+- `version` (String): Model version
+- `model_type` (String): Type (e.g., "RandomForest", "XGBoost", "LSTM")
+- `file_path` (String): Path to saved model file
+- `is_active` (Boolean): Whether model is currently active
+- `created_at` (DateTime): Creation timestamp
+- `trained_on_date` (Date): Training date
+- `performance_metrics` (JSON): Model performance metrics
+- `description` (Text): Model description
+
+**`feature_store`** - ML-ready features for model training/inference
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `date` (DateTime, Indexed): Feature date
+
+**Technical Features:**
+- `log_return` (Float): Logarithmic return
+- `rsi` (Float): RSI value
+- `macd` (Float): MACD value
+- `sma_50` (Float): 50-day SMA
+- `sma_200` (Float): 200-day SMA
+- `atr` (Float): Average True Range
+- `volatility` (Float): Price volatility
+- `price_momentum` (Float): Price momentum
+- `volume_trend` (Float): Volume trend
+
+**Fundamental Features:**
+- `pe_ratio` (Float): P/E ratio
+- `roe` (Float): Return on Equity
+- `debt_to_equity` (Float): Debt-to-Equity ratio
+
+**Macro Features:**
+- `vix` (Float): India VIX value
+- `crude_oil` (Float): Crude oil price
+- `usd_inr` (Float): USD/INR exchange rate
+
+**`ai_predictions`** - AI model price predictions
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`)
+- `index_id` (FK → `indices.id`, Nullable, Indexed): **Index isolation**
+- `generated_at` (DateTime): Prediction timestamp
+- `model_name` (String): Model that generated prediction
+- `target_date` (Date): Target prediction date
+- `predicted_price` (Float): Predicted price
+- `confidence_score` (Float): Prediction confidence (0-1)
+- `direction` (String): Predicted direction ("UP", "DOWN", "NEUTRAL")
+
+#### **Operations Zone**
+
+**`trade_signals`** - Strategy-generated trade signals
+- `id` (PK, Integer)
+- `created_at` (DateTime, Indexed): Signal creation time
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `index_id` (FK → `indices.id`, Nullable, Indexed): **Index isolation**
+- `strategy_name` (String): Strategy that generated signal
+- `signal` (String): Signal type ("BUY", "SELL", "HOLD")
+- `status` (String): Signal status ("NEW", "PROCESSED", "REJECTED", "CANCELLED")
+- `entry_price` (Float): Recommended entry price
+- `stop_loss` (Float): Stop loss price
+- `target_price` (Float): Target price
+- `quantity` (Integer): Recommended quantity
+- `reasoning` (Text): Signal reasoning/explanation
+- `priority` (Integer): Signal priority (1-10, higher = more important)
+
+**`orders`** - Order lifecycle management
+- `id` (PK, Integer)
+- `signal_id` (FK → `trade_signals.id`, Nullable): Source signal
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `index_id` (FK → `indices.id`, Nullable, Indexed): **Index isolation**
+- `order_type` (String): Order type ("MARKET", "LIMIT", "SL", "SL-M")
+- `side` (String): Order side ("BUY", "SELL")
+- `quantity` (Integer): Order quantity
+- `price` (Float): Limit/trigger price
+- `status` (String): Order status ("SUBMITTED", "FILLED", "REJECTED", "CANCELLED", "CLOSED")
+- `created_at` (DateTime, Indexed): Order creation time
+- `filled_at` (DateTime, Nullable): Fill timestamp
+- `filled_price` (Float, Nullable): Actual fill price
+- `stop_loss` (Float, Nullable): Stop loss price
+- `target_price` (Float, Nullable): Target price
+- `mode` (String): Trading mode ("PAPER", "LIVE")
+- `broker_order_id` (String, Nullable): Broker order ID (for live trading)
+
+**`portfolio`** - Current positions and P&L tracking
+- `id` (PK, Integer)
+- `ticker` (FK → `company_profiles.ticker`, Indexed)
+- `index_id` (FK → `indices.id`, Nullable, Indexed): **Index isolation**
+- `quantity` (Integer): Current position quantity
+- `avg_entry_price` (Float): Average entry price
+- `current_price` (Float): Current market price
+- `last_updated` (DateTime): Last price update time
+- `unrealized_pnl` (Float): Unrealized profit/loss
+- `realized_pnl` (Float): Realized profit/loss
+- `stop_loss` (Float, Nullable): Stop loss price
+- `target_price` (Float, Nullable): Target price
+- `entry_date` (DateTime): Position entry date
+- `order_id` (FK → `orders.id`, Nullable): Source order
+
+**Note:** Same ticker can have positions in different indices (isolated by `index_id`).
+
+**`backtest_runs`** - Backtest execution metadata
+- `id` (PK, Integer)
+- `created_at` (DateTime): Backtest creation time
+- `strategy_name` (String, Indexed): Strategy tested
+- `ticker` (FK → `company_profiles.ticker`, Indexed): Stock tested
+- `start_date` (DateTime): Backtest start date
+- `end_date` (DateTime): Backtest end date
+- `initial_capital` (Float): Starting capital
+- `position_size_pct` (Float): Position size percentage
+- `total_trades` (Integer): Total trades executed
+- `winning_trades` (Integer): Number of winning trades
+- `losing_trades` (Integer): Number of losing trades
+- `net_profit` (Float): Net profit/loss
+- `total_profit` (Float): Total profit from winning trades
+- `total_loss` (Float): Total loss from losing trades
+- `win_rate` (Float): Win rate percentage
+- `profit_factor` (Float): Profit factor (profit/loss ratio)
+- `max_drawdown` (Float): Maximum drawdown percentage
+- `avg_win` (Float): Average win amount
+- `avg_loss` (Float): Average loss amount
+- `final_capital` (Float): Final capital after backtest
+- `notes` (Text): Backtest notes
+
+**`backtest_trades`** - Individual trades from backtest
+- `id` (PK, Integer)
+- `backtest_run_id` (FK → `backtest_runs.id`, Indexed): Parent backtest
+- `entry_date` (DateTime): Trade entry date
+- `exit_date` (DateTime): Trade exit date
+- `entry_price` (Float): Entry price
+- `exit_price` (Float): Exit price
+- `quantity` (Integer): Trade quantity
+- `side` (String): Trade side ("BUY", "SELL")
+- `pnl` (Float): Profit/loss for this trade
+- `pnl_pct` (Float): Profit/loss percentage
+- `exit_reason` (String): Exit reason ("STOP_LOSS", "TARGET", "END_DATE")
+
+#### **Strategy Zone**
+
+**`strategy_metadata`** - Index-specific strategy documentation
+- `id` (PK, Integer)
+- `strategy_name` (String, Indexed): Strategy identifier (must match class name)
+- `index_id` (FK → `indices.id`, Indexed): **Index-specific strategy**
+- `display_name` (String): Human-readable strategy name
+- `description` (Text): Strategy description
+- `category` (String): Strategy category ("Technical", "Fundamental", "Hybrid", "AI-Based", etc.)
+- `parameters` (JSON, Nullable): Strategy-specific parameters
+- `recommended_timeframe` (String): Recommended timeframe ("Day Trading", "Swing Trading", etc.)
+- `risk_level` (String): Risk level ("Low", "Medium", "High")
+- `how_it_works` (Text): How the strategy works
+- `entry_conditions` (Text): Entry conditions
+- `exit_conditions` (Text): Exit conditions
+- `risk_management` (Text): Risk management approach
+- `created_at` (DateTime): Creation timestamp
+- `updated_at` (DateTime): Last update timestamp
+- `is_active` (Boolean): Whether strategy is active
+- `author` (String, Nullable): Strategy author
+- `version` (String): Strategy version
+
+**Note:** Same strategy can have different documentation per index.
+
+### Index Isolation
+
+**Complete data isolation** is achieved through `index_id` foreign keys in operational tables:
+
+- **`portfolio`**: Positions are isolated per index (same ticker can have different positions in different indices)
+- **`trade_signals`**: Signals are isolated per index
+- **`orders`**: Orders are isolated per index
+- **`ai_predictions`**: Predictions are isolated per index
+- **`watchlist`**: Watchlists are index-specific
+- **`strategy_metadata`**: Strategy documentation is index-specific
+
+This ensures that when you select an index in the dashboard, **all data shown is completely isolated** to that index only.
+
+### Relationships Diagram
+
+```
+indices (1) ──< (M) company_index_mapping (M) >── (1) company_profiles
+   │                                                      │
+   │                                                      ├──< (M) market_data
+   │                                                      ├──< (M) fundamental_data
+   │                                                      ├──< (M) sentiment_data
+   │                                                      ├──< (M) feature_store
+   │                                                      ├──< (M) ai_predictions
+   │                                                      ├──< (M) watchlist
+   │                                                      ├──< (M) orders
+   │                                                      └──< (M) portfolio
+   │
+   ├──< (M) watchlist
+   ├──< (M) strategy_metadata
+   ├──< (M) ai_predictions (via index_id)
+   ├──< (M) trade_signals (via index_id)
+   ├──< (M) orders (via index_id)
+   └──< (M) portfolio (via index_id)
+
+trade_signals (1) ──< (M) orders
+orders (1) ──< (M) portfolio
+backtest_runs (1) ──< (M) backtest_trades
+```
+
+### Database Indexes
+
+For performance optimization, the following columns are indexed:
+
+- **Primary Keys**: All `id` columns
+- **Foreign Keys**: All foreign key columns (`ticker`, `index_id`, `signal_id`, etc.)
+- **Frequently Queried**: `date`, `created_at`, `status`, `is_active`
+- **Lookup Fields**: `name`, `model_name`, `strategy_name`, `indicator_name`
+
+### Database Migrations
+
+The system includes a migration framework for schema updates:
+
+- `migrations/add_index_support.py` - Adds index support (indices table, company_index_mapping, index_id columns)
+- `migrations/add_index_isolation.py` - Adds index_id to operational tables for complete isolation
+- `migrations/add_quantity_to_trade_signals.py` - Adds quantity column to trade_signals
+- `migrations/add_missing_trade_signal_columns.py` - Adds priority and reasoning columns
+- `migrations/add_strategy_metadata_table.py` - Creates strategy_metadata table
+- `migrations/check_schema.py` - Utility to check schema differences
+
+**Running Migrations:**
+```bash
+# Run a specific migration
+uv run python -m migrations.add_index_isolation
+
+# Check for schema differences
+uv run python -m migrations.check_schema
+```
+
 ## 🔧 Configuration
 
 ### Database
@@ -395,6 +736,8 @@ The system uses SQLite by default (`stock_data.db`). To switch to PostgreSQL:
    ```bash
    uv add psycopg2-binary
    ```
+
+**Note:** When switching databases, ensure all migrations are run to create the schema.
 
 ### Trading Mode
 
