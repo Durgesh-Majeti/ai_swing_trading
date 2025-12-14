@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Live trading broker integration
+- Advanced backtesting framework with walk-forward analysis
+- Real-time portfolio rebalancing
+- Email/SMS notifications for trades
+- Multi-timeframe analysis support
+- Index performance comparison tools
+- Sector rotation strategies
+
+## [0.2.0] - 2025-12-14
+
 ### Added
+- **Complete Index Isolation** (2025-12-14)
+  - Added `index_id` to Portfolio, TradeSignal, Order, AIPredictions tables
+  - Complete data isolation between indices
+  - Index initialization/reset utility (`utils/index_reset.py`)
+  - All operational data now properly isolated per index
+  - Migration script for index isolation (`migrations/add_index_isolation.py`)
+
+- **Workflow Synchronization with Index** (2025-12-14)
+  - ETL Module now accepts `index_id` and filters by index
+  - Feature Store now accepts `index_id` and filters by index
+  - AI Inference now accepts `index_id` and filters by index
+  - Execution Engine now filters signals by `index_id`
+  - All workflow controls in dashboard synced with selected index
+  - Full workflow runner respects selected index
+
 - **Multi-Index Support** (2025-12-14)
   - Complete support for 54+ NSE indices (Nifty 50, 100, 500, Sectoral, Thematic, Strategy indices)
   - Index model in database with company-index relationships
@@ -139,6 +165,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sector rotation strategies
 
 ## [0.1.0] - 2025-12-14
+
+### Release Notes
+This is the initial stable release of the Nifty 50 AI Swing Trader system. The system is production-ready with all core modules functional, including:
+
+- Complete ETL pipeline for data collection
+- AI/ML module with model training and inference
+- Strategy engine with plug-and-play architecture
+- Execution engine with comprehensive risk management
+- Full-featured dashboard with Control Center
+- Automated scheduling system
+- AI-independent operation (works with or without AI models)
+
+**Key Features:**
+- Decoupled architecture for maximum resilience
+- Hub-and-spoke design with database as central communication hub
+- AI models are optional enhancements, not requirements
+- Paper trading mode for safe testing
+- Comprehensive documentation and changelog
+
+**Breaking Changes:** None (initial release)
+
+**Migration Guide:** N/A (initial release)
 
 ### Added
 
