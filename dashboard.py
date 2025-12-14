@@ -9,7 +9,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from database.models import (
     SessionLocal, Portfolio, TradeSignal, Order, AIPredictions,
-    Watchlist, CompanyProfile, MarketData, MacroIndicator, ModelRegistry
+    Watchlist, CompanyProfile, MarketData, MacroIndicator, ModelRegistry,
+    BacktestRun, BacktestTrade
 )
 from sqlalchemy import select, func, desc
 from datetime import datetime, timedelta
@@ -30,7 +31,7 @@ def get_session():
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.selectbox(
     "Choose a page",
-    ["Dashboard", "Control Center", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
+    ["Dashboard", "Control Center", "Backtesting", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
 )
 
 # Main Dashboard
@@ -605,6 +606,219 @@ elif page == "Control Center":
             except Exception as e:
                 st.error(f"❌ Workflow failed at step {steps_completed + 1}: {str(e)}")
                 progress_bar.progress(0)
+
+elif page == "Backtesting":
+    st.title("📊 Backtesting")
+    st.markdown("**Test strategies on historical data to evaluate performance**")
+    
+    session = get_session()
+    
+    # Configuration
+    st.subheader("⚙️ Backtest Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Strategy selection
+        from strategies.registry import StrategyRegistry
+        registry = StrategyRegistry()
+        strategies = registry.list_strategies()
+        
+        if not strategies:
+            st.warning("No strategies available. Create strategies first.")
+            session.close()
+            st.stop()
+        
+        selected_strategy = st.selectbox("Select Strategy", strategies)
+    
+    with col2:
+        # Ticker selection
+        watchlist = session.scalars(select(Watchlist).filter_by(is_active=True)).all()
+        tickers = [w.ticker for w in watchlist] if watchlist else []
+        
+        if not tickers:
+            st.warning("Watchlist is empty. Add stocks to watchlist first.")
+            session.close()
+            st.stop()
+        
+        selected_ticker = st.selectbox("Select Ticker", tickers)
+    
+    with col3:
+        # Date range
+        days_back = st.number_input("Days to Look Back", min_value=30, max_value=3650, value=365, step=30)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days_back)
+        
+        st.info(f"Period: {start_date} to {end_date}")
+    
+    col4, col5 = st.columns(2)
+    with col4:
+        initial_capital = st.number_input("Initial Capital (₹)", min_value=10000, value=100000, step=10000)
+    with col5:
+        position_size_pct = st.slider("Position Size (% of capital)", min_value=1, max_value=50, value=10) / 100
+    
+    # Run backtest
+    if st.button("🚀 Run Backtest", type="primary", use_container_width=True):
+        with st.spinner(f"Running backtest for {selected_strategy} on {selected_ticker}..."):
+            try:
+                from backtesting.engine import BacktestEngine
+                
+                engine = BacktestEngine(initial_capital=initial_capital)
+                result = engine.run_backtest(
+                    selected_strategy,
+                    selected_ticker,
+                    datetime.combine(start_date, datetime.min.time()),
+                    datetime.combine(end_date, datetime.max.time()),
+                    position_size_pct
+                )
+                engine.close()
+                
+                # Display results
+                st.success("✅ Backtest completed!")
+                
+                # Key Metrics
+                st.subheader("📈 Performance Metrics")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Net Profit", f"₹{result.net_profit:,.2f}")
+                    st.metric("Return %", f"{(result.net_profit / initial_capital) * 100:.2f}%")
+                
+                with col2:
+                    st.metric("Total Trades", result.total_trades)
+                    st.metric("Win Rate", f"{result.win_rate:.1f}%")
+                
+                with col3:
+                    st.metric("Profit Factor", f"{result.profit_factor:.2f}")
+                    st.metric("Max Drawdown", f"{result.max_drawdown:.2f}%")
+                
+                with col4:
+                    st.metric("Avg Win", f"₹{result.avg_win:,.2f}")
+                    st.metric("Avg Loss", f"₹{result.avg_loss:,.2f}")
+                
+                # Detailed breakdown
+                st.subheader("📊 Trade Breakdown")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Winning Trades:** {result.winning_trades}")
+                    st.write(f"**Total Profit:** ₹{result.total_profit:,.2f}")
+                with col2:
+                    st.write(f"**Losing Trades:** {result.losing_trades}")
+                    st.write(f"**Total Loss:** ₹{result.total_loss:,.2f}")
+                
+                # Trade list
+                if result.trades:
+                    st.subheader("📋 Trade History")
+                    trades_df = pd.DataFrame(result.trades)
+                    trades_df['entry_date'] = pd.to_datetime(trades_df['entry_date']).dt.strftime('%Y-%m-%d')
+                    trades_df['exit_date'] = pd.to_datetime(trades_df['exit_date']).dt.strftime('%Y-%m-%d')
+                    
+                    display_df = trades_df[[
+                        'entry_date', 'exit_date', 'side', 'entry_price', 
+                        'exit_price', 'quantity', 'pnl', 'pnl_pct', 'exit_reason'
+                    ]].copy()
+                    display_df.columns = ['Entry Date', 'Exit Date', 'Side', 'Entry Price', 'Exit Price', 'Quantity', 'P&L', 'P&L %', 'Exit Reason']
+                    display_df['Entry Price'] = display_df['Entry Price'].apply(lambda x: f"₹{x:.2f}")
+                    display_df['Exit Price'] = display_df['Exit Price'].apply(lambda x: f"₹{x:.2f}")
+                    display_df['P&L'] = display_df['P&L'].apply(lambda x: f"₹{x:,.2f}")
+                    display_df['P&L %'] = display_df['P&L %'].apply(lambda x: f"{x:.2f}%")
+                    
+                    st.dataframe(display_df, use_container_width=True)
+                    
+                    # P&L Chart
+                    fig = px.bar(
+                        trades_df, 
+                        x='exit_date', 
+                        y='pnl',
+                        color='pnl',
+                        color_continuous_scale=['red', 'green'],
+                        title="Trade P&L Over Time"
+                    )
+                    fig.update_layout(xaxis_title="Exit Date", yaxis_title="Profit/Loss (₹)")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Save results option
+                if st.button("💾 Save Backtest Results"):
+                    try:
+                        backtest_run = BacktestRun(
+                            strategy_name=result.strategy_name,
+                            ticker=result.ticker,
+                            start_date=result.start_date,
+                            end_date=result.end_date,
+                            initial_capital=initial_capital,
+                            position_size_pct=position_size_pct,
+                            total_trades=result.total_trades,
+                            winning_trades=result.winning_trades,
+                            losing_trades=result.losing_trades,
+                            net_profit=result.net_profit,
+                            total_profit=result.total_profit,
+                            total_loss=result.total_loss,
+                            win_rate=result.win_rate,
+                            profit_factor=result.profit_factor,
+                            max_drawdown=result.max_drawdown,
+                            avg_win=result.avg_win,
+                            avg_loss=result.avg_loss,
+                            final_capital=initial_capital + result.net_profit
+                        )
+                        session.add(backtest_run)
+                        session.commit()
+                        
+                        # Save individual trades
+                        for trade in result.trades:
+                            backtest_trade = BacktestTrade(
+                                backtest_run_id=backtest_run.id,
+                                entry_date=trade['entry_date'],
+                                exit_date=trade['exit_date'],
+                                entry_price=trade['entry_price'],
+                                exit_price=trade['exit_price'],
+                                quantity=trade['quantity'],
+                                side=trade['side'],
+                                pnl=trade['pnl'],
+                                pnl_pct=trade['pnl_pct'],
+                                exit_reason=trade['exit_reason']
+                            )
+                            session.add(backtest_trade)
+                        
+                        session.commit()
+                        st.success("✅ Backtest results saved to database!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to save results: {e}")
+                        session.rollback()
+                
+            except Exception as e:
+                st.error(f"❌ Backtest failed: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+    
+    # Historical backtest results
+    st.divider()
+    st.subheader("📜 Historical Backtest Results")
+    
+    historical_runs = session.scalars(
+        select(BacktestRun).order_by(desc(BacktestRun.created_at)).limit(20)
+    ).all()
+    
+    if historical_runs:
+        runs_data = [{
+            "Date": r.created_at.strftime("%Y-%m-%d %H:%M"),
+            "Strategy": r.strategy_name,
+            "Ticker": r.ticker,
+            "Period": f"{r.start_date.date()} to {r.end_date.date()}",
+            "Trades": r.total_trades,
+            "Win Rate": f"{r.win_rate:.1f}%",
+            "Net Profit": f"₹{r.net_profit:,.2f}",
+            "Return %": f"{(r.net_profit / r.initial_capital) * 100:.2f}%",
+            "Profit Factor": f"{r.profit_factor:.2f}"
+        } for r in historical_runs]
+        
+        st.dataframe(pd.DataFrame(runs_data), use_container_width=True)
+    else:
+        st.info("No historical backtest results. Run a backtest to see results here.")
+    
+    session.close()
 
 elif page == "Settings":
     st.title("⚙️ Settings")

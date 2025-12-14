@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Backtesting Module** (2025-12-14)
+  - Complete backtesting engine for strategy performance evaluation
+  - Historical data simulation with realistic trade execution
+  - Performance metrics calculation (win rate, profit factor, drawdown, etc.)
+  - Support for testing individual strategies or comparing all strategies
+  - Backtest results storage in database
+  - Dashboard integration with backtesting UI
+  - Trade-by-trade analysis and visualization
+  - P&L charts and performance breakdowns
+  - Historical backtest results viewing
+
 ### Fixed
 - **Database Migration Issue** (2025-12-14)
   - Added migration script to add missing `quantity` column to `trade_signals` table
