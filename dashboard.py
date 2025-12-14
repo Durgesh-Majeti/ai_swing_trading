@@ -361,7 +361,7 @@ elif page == "Control Center":
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_companies = session.scalar(select(func.count(CompanyProfile.id)))
+        total_companies = session.scalar(select(func.count(CompanyProfile.ticker)))
         st.metric("Companies", total_companies or 0)
     
     with col2:
@@ -599,7 +599,7 @@ elif page == "Settings":
     session = get_session()
     
     # Database info
-    total_companies = session.scalar(select(func.count(CompanyProfile.id)))
+    total_companies = session.scalar(select(func.count(CompanyProfile.ticker)))
     total_market_data = session.scalar(select(func.count(MarketData.id)))
     
     st.metric("Total Companies", total_companies)
