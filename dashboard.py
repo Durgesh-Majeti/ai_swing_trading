@@ -611,6 +611,146 @@ elif page == "Backtesting":
     st.title("📊 Backtesting")
     st.markdown("**Test strategies on historical data to evaluate performance**")
     
+    # Metrics Explanation
+    with st.expander("📖 Understanding Backtest Metrics", expanded=False):
+        st.markdown("""
+        ### Performance Metrics Explained
+        
+        #### 💰 Profit & Loss Metrics
+        
+        **Net Profit**
+        - Total profit or loss after all trades
+        - Formula: Final Capital - Initial Capital
+        - Positive = Profit, Negative = Loss
+        - **Interpretation**: Shows absolute rupee gain/loss
+        
+        **Return %**
+        - Percentage return on initial capital
+        - Formula: (Net Profit / Initial Capital) × 100
+        - **Interpretation**: 
+          - 10% = ₹10,000 profit on ₹1,00,000 capital
+          - Higher is better, but consider risk
+        
+        **Total Profit**
+        - Sum of all winning trades only
+        - Shows gross profit before losses
+        - **Interpretation**: Raw profit potential of strategy
+        
+        **Total Loss**
+        - Sum of all losing trades (absolute value)
+        - Shows gross losses
+        - **Interpretation**: Risk exposure of strategy
+        
+        #### 📊 Trade Statistics
+        
+        **Total Trades**
+        - Number of trades executed during backtest period
+        - **Interpretation**: 
+          - Too few = Strategy may be too conservative
+          - Too many = May indicate overtrading
+          - Ideal: Depends on strategy type (swing trading: 10-50 trades/year)
+        
+        **Win Rate**
+        - Percentage of profitable trades
+        - Formula: (Winning Trades / Total Trades) × 100
+        - **Interpretation**:
+          - 50% = Break-even (if avg win = avg loss)
+          - 60%+ = Good win rate
+          - 40% can still be profitable if avg win >> avg loss
+        
+        **Winning Trades**
+        - Count of trades that ended in profit
+        - **Interpretation**: Shows strategy's success frequency
+        
+        **Losing Trades**
+        - Count of trades that ended in loss
+        - **Interpretation**: Shows how often strategy fails
+        
+        #### 📈 Risk Metrics
+        
+        **Profit Factor**
+        - Ratio of total profit to total loss
+        - Formula: Total Profit / Total Loss
+        - **Interpretation**:
+          - **> 2.0** = Excellent (makes ₹2 for every ₹1 lost)
+          - **1.5 - 2.0** = Good
+          - **1.0 - 1.5** = Acceptable
+          - **< 1.0** = Losing strategy (loses more than gains)
+          - **Key**: Most important metric after net profit
+        
+        **Max Drawdown**
+        - Maximum peak-to-trough decline in capital
+        - Shows worst-case scenario during backtest
+        - **Interpretation**:
+          - **-5%** = Lost 5% from peak at worst point
+          - Lower (less negative) = Better risk control
+          - **-20%** = High risk, may cause psychological stress
+          - **Warning**: Past drawdowns don't guarantee future limits
+        
+        **Average Win**
+        - Average profit per winning trade
+        - Formula: Total Profit / Winning Trades
+        - **Interpretation**: 
+          - Higher = Better profit per successful trade
+          - Compare with Average Loss for risk/reward
+        
+        **Average Loss**
+        - Average loss per losing trade
+        - Formula: Total Loss / Losing Trades
+        - **Interpretation**:
+          - Lower = Better risk control
+          - Should be < Average Win for profitability
+        
+        #### 🎯 Risk/Reward Analysis
+        
+        **Ideal Strategy Profile:**
+        - Profit Factor > 1.5
+        - Win Rate > 50% (or high profit factor with lower win rate)
+        - Average Win > Average Loss (at least 2:1 ratio)
+        - Max Drawdown < 15%
+        - Consistent performance across different market conditions
+        
+        **Red Flags:**
+        - Profit Factor < 1.0 (losing strategy)
+        - Max Drawdown > 25% (high risk)
+        - Average Loss > Average Win (poor risk management)
+        - Very low win rate (< 30%) with low profit factor
+        
+        #### 📋 Trade Details
+        
+        **Entry Date / Exit Date**
+        - When trade was opened and closed
+        - Shows trade duration
+        
+        **Side**
+        - BUY = Long position (profit when price goes up)
+        - SELL = Short position (profit when price goes down)
+        
+        **Entry Price / Exit Price**
+        - Price at which trade was entered and exited
+        
+        **Quantity**
+        - Number of shares traded
+        
+        **P&L (Profit & Loss)**
+        - Absolute profit/loss in rupees for this trade
+        - Positive = Profit, Negative = Loss
+        
+        **P&L %**
+        - Percentage return on this specific trade
+        - Formula: ((Exit Price - Entry Price) / Entry Price) × 100
+        
+        **Exit Reason**
+        - **STOP_LOSS**: Price hit stop loss (risk management worked)
+        - **TARGET**: Price hit target (profit taking)
+        - **END_DATE**: Trade still open at end of backtest period
+        
+        ---
+        
+        **💡 Pro Tip**: A strategy with 40% win rate but 3:1 profit factor (avg win 3× avg loss) 
+        can be more profitable than 60% win rate with 1:1 profit factor!
+        """)
+    
     session = get_session()
     
     # Configuration
