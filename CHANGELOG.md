@@ -16,6 +16,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2025-12-14
 
+### Release Notes
+This is the initial stable release of the Nifty 50 AI Swing Trader system. The system is production-ready with all core modules functional, including:
+
+- Complete ETL pipeline for data collection
+- AI/ML module with model training and inference
+- Strategy engine with plug-and-play architecture
+- Execution engine with comprehensive risk management
+- Full-featured dashboard with Control Center
+- Automated scheduling system
+- AI-independent operation (works with or without AI models)
+
+**Key Features:**
+- Decoupled architecture for maximum resilience
+- Hub-and-spoke design with database as central communication hub
+- AI models are optional enhancements, not requirements
+- Paper trading mode for safe testing
+- Comprehensive documentation and changelog
+
+**Breaking Changes:** None (initial release)
+
+**Migration Guide:** N/A (initial release)
+
 ### Added
 
 #### Core System

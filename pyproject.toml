@@ -1,7 +1,7 @@
 [project]
 name = "indian-stock-analysis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Nifty 50 AI Swing Trader - Fully automated, modular trading system with AI-powered analysis"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
