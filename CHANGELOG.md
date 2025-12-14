@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Database Migration Issue** (2025-12-14)
+  - Added migration script to add missing `quantity` column to `trade_signals` table
+  - Created migration utilities for future schema updates
+  - Updated `init_db.py` with better table counting and migration notes
+
 ### Planned
 - Live trading broker integration
 - Advanced backtesting framework
