@@ -54,9 +54,13 @@ class TradingScheduler:
             logger.info("Step 1: Generating features...")
             self.feature_store.generate_all_features()
             
-            # 2. Run AI Inference
+            # 2. Run AI Inference (optional - continues even if no model available)
             logger.info("Step 2: Running AI inference...")
-            self.inference.run_daily_inference()
+            try:
+                self.inference.run_daily_inference()
+            except Exception as e:
+                logger.warning(f"⚠️  AI Inference skipped (no model or error): {e}")
+                logger.info("Continuing with strategy engine (will use technical/fundamental analysis only)")
             
             # 3. Run Strategy Engine
             logger.info("Step 3: Running strategy engine...")

@@ -6,6 +6,8 @@ A fully automated, modular trading system for Nifty 50 stocks using a hybrid app
 
 **Decoupled Architecture**: The system is built as a set of independent "workers" that never communicate directly with each other. Instead, they synchronize through a central **Database Hub**. This ensures that if the AI module crashes, the Execution module can still manage existing trades safely.
 
+**AI Independence**: The system is designed to function completely independently of AI models. If no AI model is available or if the AI module fails, the system automatically falls back to technical and fundamental analysis. Strategies adjust their scoring weights dynamically, and all workflows continue to operate normally.
+
 ## 🏗️ System Architecture: The "Hub-and-Spoke" Model
 
 The entire project revolves around a central **SQL Database** which acts as the "Source of Truth." Every other module—Data Collection, AI, Strategy, and Execution—is a spoke connected to this hub.

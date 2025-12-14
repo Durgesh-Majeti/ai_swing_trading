@@ -354,6 +354,9 @@ elif page == "Control Center":
     st.title("🎮 Control Center")
     st.markdown("**Control and execute all trading system workflows from here**")
     
+    # Info banner about AI independence
+    st.info("💡 **System Resilience**: This system is designed to work independently of AI models. If no AI model is available, strategies will use technical and fundamental analysis only. All workflows will continue to function.")
+    
     session = get_session()
     
     # System Status
@@ -454,11 +457,19 @@ elif page == "Control Center":
     with st.expander("🧠 AI Inference"):
         st.markdown("**Generate predictions using the active AI model**")
         
+        # Check if model is available
+        session_check = get_session()
+        active_model = session_check.scalar(select(ModelRegistry).filter_by(is_active=True))
+        session_check.close()
+        
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.info("Runs the active model to generate price predictions for all watchlist stocks")
+            if active_model:
+                st.info("Runs the active model to generate price predictions for all watchlist stocks")
+            else:
+                st.warning("⚠️ No active AI model found. Train and activate a model first, or the system will work with technical/fundamental analysis only.")
         with col2:
-            if st.button("🧠 Run Inference", key="inference_btn", use_container_width=True):
+            if st.button("🧠 Run Inference", key="inference_btn", use_container_width=True, disabled=not active_model):
                 with st.spinner("Running AI inference... Generating predictions..."):
                     try:
                         from ai.inference import InferenceEngine
@@ -467,7 +478,7 @@ elif page == "Control Center":
                         st.success("✅ AI Inference completed successfully!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Inference failed: {str(e)}")
+                        st.warning(f"⚠️ Inference skipped: {str(e)}. System will continue with technical/fundamental analysis.")
     
     # Strategy Engine
     with st.expander("⚖️ Strategy Engine"):
@@ -525,7 +536,7 @@ elif page == "Control Center":
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.info("This will run all selected steps in sequence. Make sure you have a trained and activated model for inference.")
+        st.info("This will run all selected steps in sequence. Note: Inference is optional - the system will work with technical/fundamental analysis if no AI model is available.")
     with col2:
         if st.button("🚀 Run Full Workflow", key="full_workflow_btn", use_container_width=True, type="primary"):
             progress_bar = st.progress(0)
@@ -553,12 +564,16 @@ elif page == "Control Center":
                     steps_completed += 1
                     progress_bar.progress(steps_completed / total_steps)
                 
-                # Inference
+                # Inference (optional - continues even if no model)
                 if "Inference" in workflow_steps:
                     status_text.text("Step {}/{}: Running AI inference...".format(steps_completed + 1, total_steps))
-                    from ai.inference import InferenceEngine
-                    engine = InferenceEngine()
-                    engine.run_daily_inference()
+                    try:
+                        from ai.inference import InferenceEngine
+                        engine = InferenceEngine()
+                        engine.run_daily_inference()
+                    except Exception as e:
+                        st.warning(f"⚠️ AI Inference skipped (no model available): {str(e)}")
+                        st.info("Continuing with remaining steps...")
                     steps_completed += 1
                     progress_bar.progress(steps_completed / total_steps)
                 
