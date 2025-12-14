@@ -38,7 +38,10 @@ class HybridStrategy(BaseStrategy):
             sell_score = 0
             reasoning_parts = []
             
-            # 1. AI Prediction (weight: 40%)
+            # Check if AI predictions are available
+            has_ai = ai_prediction is not None
+            
+            # 1. AI Prediction (weight: 40% if available, otherwise redistributed)
             if ai_prediction:
                 if ai_prediction.direction == "UP" and ai_prediction.confidence_score > 0.7:
                     buy_score += 40
@@ -46,37 +49,42 @@ class HybridStrategy(BaseStrategy):
                 elif ai_prediction.direction == "DOWN" and ai_prediction.confidence_score > 0.7:
                     sell_score += 40
                     reasoning_parts.append(f"AI: {ai_prediction.direction} (Confidence: {ai_prediction.confidence_score:.0%})")
+            else:
+                # No AI available - note in reasoning
+                reasoning_parts.append("AI: Not available (using technical/fundamental only)")
             
-            # 2. Technical Indicators (weight: 30%)
+            # 2. Technical Indicators (weight: 30% normally, 50% if no AI)
+            tech_weight = 50 if not has_ai else 30
             if indicators:
                 if indicators.rsi_14:
                     if indicators.rsi_14 < 35:
-                        buy_score += 15
+                        buy_score += (tech_weight // 2)
                         reasoning_parts.append(f"RSI oversold ({indicators.rsi_14:.1f})")
                     elif indicators.rsi_14 > 65:
-                        sell_score += 15
+                        sell_score += (tech_weight // 2)
                         reasoning_parts.append(f"RSI overbought ({indicators.rsi_14:.1f})")
                 
                 if indicators.macd and indicators.macd_signal:
                     if indicators.macd > indicators.macd_signal:
-                        buy_score += 15
+                        buy_score += (tech_weight // 2)
                     else:
-                        sell_score += 15
+                        sell_score += (tech_weight // 2)
             
-            # 3. Fundamentals (weight: 20%)
+            # 3. Fundamentals (weight: 20% normally, 30% if no AI)
+            fund_weight = 30 if not has_ai else 20
             if fundamental:
                 if fundamental.pe_ratio and fundamental.pe_ratio < 20:  # Undervalued
-                    buy_score += 10
+                    buy_score += (fund_weight // 2)
                     reasoning_parts.append(f"Low P/E ({fundamental.pe_ratio:.1f})")
                 elif fundamental.pe_ratio and fundamental.pe_ratio > 40:  # Overvalued
-                    sell_score += 10
+                    sell_score += (fund_weight // 2)
                     reasoning_parts.append(f"High P/E ({fundamental.pe_ratio:.1f})")
                 
                 if fundamental.roe and fundamental.roe > 15:  # Good profitability
-                    buy_score += 10
+                    buy_score += (fund_weight // 2)
                     reasoning_parts.append(f"Strong ROE ({fundamental.roe:.1f}%)")
             
-            # 4. Market Sentiment (weight: 10%)
+            # 4. Market Sentiment (weight: 10% - unchanged)
             if vix:
                 if vix < 15:  # Low volatility, good for entry
                     buy_score += 5
@@ -85,11 +93,12 @@ class HybridStrategy(BaseStrategy):
                     sell_score += 5
                     reasoning_parts.append(f"High VIX ({vix:.1f})")
             
-            # Determine signal
+            # Determine signal (adjust threshold if no AI - lower threshold since max score is lower)
             signal = None
-            if buy_score >= 60:  # Threshold for buy
+            threshold = 50 if not has_ai else 60  # Lower threshold when AI unavailable
+            if buy_score >= threshold:
                 signal = "BUY"
-            elif sell_score >= 60:  # Threshold for sell
+            elif sell_score >= threshold:
                 signal = "SELL"
             
             if signal is None:
