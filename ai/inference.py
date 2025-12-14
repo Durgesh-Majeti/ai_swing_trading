@@ -16,14 +16,21 @@ from ai.feature_store import FeatureStoreEngine
 class InferenceEngine:
     """Generates daily predictions using active model"""
     
-    def __init__(self):
+    def __init__(self, index_id: Optional[int] = None):
         self.session = SessionLocal()
         self.model_registry = ModelRegistryManager()
-        self.feature_store = FeatureStoreEngine()
+        self.feature_store = FeatureStoreEngine(index_id=index_id)
+        self.index_id = index_id
     
     def run_daily_inference(self):
-        """Run inference for all watchlist stocks"""
-        logger.info("🧠 Starting Daily Inference...")
+        """Run inference for watchlist stocks (filtered by index if specified)"""
+        index_name = None
+        if self.index_id:
+            from database.models import Index
+            index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+            index_name = index.display_name if index else None
+        
+        logger.info(f"🧠 Starting Daily Inference{' for ' + index_name if index_name else ''}...")
         
         # Check if we have an active model
         model_obj, model_reg = self.model_registry.load_active_model()
@@ -34,21 +41,37 @@ class InferenceEngine:
         
         logger.info(f"Using model: {model_reg.model_name}")
         
-        # Get active watchlist
-        watchlist = self.session.scalars(
-            select(Watchlist).filter_by(is_active=True)
-        ).all()
-        
-        if not watchlist:
-            # Fallback to all companies
-            companies = self.session.scalars(select(CompanyProfile)).all()
-            tickers = [c.ticker for c in companies]
+        # Get active watchlist, filtered by index if specified
+        if self.index_id:
+            watchlist = self.session.scalars(
+                select(Watchlist).filter_by(is_active=True, index_id=self.index_id)
+            ).all()
+            if not watchlist:
+                # Fallback: get companies from index
+                from database.models import Index
+                index = self.session.scalar(select(Index).filter_by(id=self.index_id))
+                if index:
+                    tickers_with_index = [(c.ticker, self.index_id) for c in index.companies]
+                else:
+                    tickers_with_index = []
+            else:
+                tickers_with_index = [(w.ticker, w.index_id) for w in watchlist]
         else:
-            tickers = [w.ticker for w in watchlist]
+            # Get all active watchlist
+            watchlist = self.session.scalars(
+                select(Watchlist).filter_by(is_active=True)
+            ).all()
+            
+            if not watchlist:
+                # Fallback to all companies
+                companies = self.session.scalars(select(CompanyProfile)).all()
+                tickers_with_index = [(c.ticker, None) for c in companies]
+            else:
+                tickers_with_index = [(w.ticker, w.index_id) for w in watchlist]
         
         predictions_made = 0
         
-        for ticker in tickers:
+        for ticker, index_id in tickers_with_index:
             try:
                 # Ensure features are up to date
                 self.feature_store.generate_features(ticker)
@@ -113,16 +136,24 @@ class InferenceEngine:
                 )
                 existing = self.session.scalars(stmt).first()
                 
+                # Use index_id from watchlist, or get from company if not available
+                if index_id is None:
+                    company = self.session.scalar(select(CompanyProfile).filter_by(ticker=ticker))
+                    if company and company.indices:
+                        index_id = company.indices[0].id  # Use first index
+                
                 if existing:
                     # Update existing prediction
                     existing.predicted_price = float(predicted_price)
                     existing.confidence_score = float(confidence)
                     existing.direction = direction
                     existing.generated_at = datetime.now()
+                    existing.index_id = index_id  # Update index_id
                 else:
-                    # Create new prediction
+                    # Create new prediction with index_id
                     prediction = AIPredictions(
                         ticker=ticker,
+                        index_id=index_id,  # Store index_id for isolation
                         model_name=model_reg.model_name,
                         target_date=target_date,
                         predicted_price=float(predicted_price),

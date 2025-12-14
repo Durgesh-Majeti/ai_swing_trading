@@ -101,7 +101,7 @@ class BacktestEngine:
         
         # Simulate trading
         capital = self.initial_capital
-        position = None  # {ticker, entry_price, quantity, entry_date, stop_loss, target}
+        position = None  # {ticker, entry_price, quantity, entry_date, stop_loss, target, capital_used}
         equity_curve = [capital]
         peak_equity = capital
         
@@ -115,6 +115,8 @@ class BacktestEngine:
                 if position['side'] == 'BUY':
                     if current_price <= position['stop_loss']:
                         # Stop loss hit
+                        # Return capital used + P&L
+                        capital += position['capital_used']  # Return the capital we used
                         pnl = (position['stop_loss'] - position['entry_price']) * position['quantity']
                         capital += pnl
                         result.trades.append({
@@ -131,6 +133,8 @@ class BacktestEngine:
                         position = None
                     elif current_price >= position['target']:
                         # Target hit
+                        # Return capital used + P&L
+                        capital += position['capital_used']  # Return the capital we used
                         pnl = (position['target'] - position['entry_price']) * position['quantity']
                         capital += pnl
                         result.trades.append({
@@ -146,12 +150,18 @@ class BacktestEngine:
                         })
                         position = None
                     else:
-                        # Update position value
-                        current_value = current_price * position['quantity']
-                        equity_curve.append(capital + (current_value - position['entry_price'] * position['quantity']))
-                else:  # SELL position
+                        # Update position value (unrealized P&L)
+                        if position['side'] == 'BUY':
+                            unrealized_pnl = (current_price - position['entry_price']) * position['quantity']
+                        else:
+                            unrealized_pnl = (position['entry_price'] - current_price) * position['quantity']
+                        # Equity = available capital + capital used in position + unrealized P&L
+                        equity_curve.append(capital + position['capital_used'] + unrealized_pnl)
+                else:  # SELL position (short)
                     if current_price >= position['stop_loss']:
                         # Stop loss hit (for short)
+                        # Return capital used + P&L
+                        capital += position['capital_used']  # Return the capital we used
                         pnl = (position['entry_price'] - position['stop_loss']) * position['quantity']
                         capital += pnl
                         result.trades.append({
@@ -168,6 +178,8 @@ class BacktestEngine:
                         position = None
                     elif current_price <= position['target']:
                         # Target hit (for short)
+                        # Return capital used + P&L
+                        capital += position['capital_used']  # Return the capital we used
                         pnl = (position['entry_price'] - position['target']) * position['quantity']
                         capital += pnl
                         result.trades.append({
@@ -183,9 +195,10 @@ class BacktestEngine:
                         })
                         position = None
                     else:
-                        current_value = position['entry_price'] * position['quantity']
-                        unrealized = (position['entry_price'] - current_price) * position['quantity']
-                        equity_curve.append(capital + unrealized)
+                        # Update position value (unrealized P&L for short)
+                        unrealized_pnl = (position['entry_price'] - current_price) * position['quantity']
+                        # Equity = available capital + capital used in position + unrealized P&L
+                        equity_curve.append(capital + position['capital_used'] + unrealized_pnl)
             else:
                 # No position - check for new signal
                 # Calculate indicators on the fly from historical data up to current date
@@ -283,6 +296,7 @@ class BacktestEngine:
                         quantity = int(position_value / current_price)
                         
                         if quantity > 0:
+                            capital_used = current_price * quantity
                             position = {
                                 'ticker': ticker,
                                 'side': signal,
@@ -290,11 +304,12 @@ class BacktestEngine:
                                 'quantity': quantity,
                                 'entry_date': current_date,
                                 'stop_loss': stop_loss,
-                                'target': target_price
+                                'target': target_price,
+                                'capital_used': capital_used  # Track capital used for this position
                             }
                             
-                            # Deduct capital for position
-                            capital -= (current_price * quantity)
+                            # Deduct capital for position (we'll add it back when we close)
+                            capital -= capital_used
                             
                 except Exception as e:
                     logger.debug(f"Error generating signal for {ticker} on {current_date}: {e}")
@@ -312,6 +327,9 @@ class BacktestEngine:
         # Close any remaining position at end date
         if position:
             final_price = df.iloc[-1]['close']
+            # Return capital used
+            capital += position['capital_used']
+            
             if position['side'] == 'BUY':
                 pnl = (final_price - position['entry_price']) * position['quantity']
             else:

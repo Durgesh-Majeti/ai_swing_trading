@@ -1,6 +1,6 @@
-# Nifty 50 AI Swing Trader
+# Indian Stock Analysis - Multi-Index AI Swing Trader
 
-A fully automated, modular trading system for Nifty 50 stocks using a hybrid approach of traditional financial analysis and modern Artificial Intelligence.
+A fully automated, modular trading system for Indian stocks across multiple NSE indices (Nifty 50, Nifty 100, Nifty 500, Sectoral indices, and more) using a hybrid approach of traditional financial analysis and modern Artificial Intelligence.
 
 ## 🎯 Core Philosophy
 
@@ -14,10 +14,12 @@ The entire project revolves around a central **SQL Database** which acts as the 
 
 ### Database Zones
 
-- **Watchlist Zone**: Defines what to track (e.g., RELIANCE.NS, TCS.NS)
+- **Index Zone**: Manages multiple stock indices (Nifty 50, Nifty 100, Sectoral, etc.)
+- **Watchlist Zone**: Index-specific watchlists defining what to track (e.g., RELIANCE.NS, TCS.NS)
 - **Data Zone**: Stores raw Market Data, Financial Reports, and Macro Indicators
 - **Intelligence Zone**: Stores trained AI Models and their daily Predictions
 - **Operations Zone**: Stores generated Trade Signals, Orders, and Portfolio status
+- **Strategy Zone**: Index-specific strategy documentation and metadata
 
 ## 📦 Module Breakdown
 
@@ -47,6 +49,7 @@ The entire project revolves around a central **SQL Database** which acts as the 
 
 **Design - "The Registry Pattern"**:
 - Strategies are "Plug-and-Play" - Drop a new strategy file into the folder, and the system automatically recognizes it
+- **Index-Specific Strategies**: Each strategy can be configured for specific indices (Nifty 50, Nifty 100, Sectoral, etc.)
 - Hybrid Logic: Combines Technical, Fundamental, and AI signals
 - Output: Generates Trade Signals (Buy/Sell, Stop Loss, Target) with status "NEW"
 
@@ -55,6 +58,13 @@ The entire project revolves around a central **SQL Database** which acts as the 
 **Available Strategies**:
 - `TechnicalStrategy`: RSI + MACD + Moving Averages
 - `HybridStrategy`: Combines Technical, Fundamental, and AI predictions
+
+**Strategy Documentation**: Each strategy can have detailed documentation including:
+- How it works
+- Entry/Exit conditions
+- Risk management approach
+- Recommended timeframe
+- Risk level assessment
 
 ### D. The Execution Engine (The Trader)
 **Role**: The "Gatekeeper" - Executes Strategy's signals with safety prioritization.
@@ -74,11 +84,15 @@ The entire project revolves around a central **SQL Database** which acts as the 
 **Role**: The "Eyes" - Visual interface for monitoring and control.
 
 **Features**:
+- **Index Management**: Create and sync companies for all NSE indices (54+ indices supported)
+- **Index Selector**: Filter all views by selected index
+- **Strategies Page**: View and manage index-specific strategies with detailed documentation
 - View current Portfolio and P&L
 - Inspect generated Signals and AI Predictions
 - Manually override or cancel signals
-- Add/Remove stocks from Watchlist
+- Add/Remove stocks from Index-specific Watchlists
 - Monitor AI Models and activate/deactivate them
+- **Backtesting**: Test strategies on historical data with comprehensive performance metrics
 
 **Location**: `dashboard.py`
 
@@ -87,16 +101,16 @@ The entire project revolves around a central **SQL Database** which acts as the 
 The system functions autonomously day after day:
 
 1. **Market Close (15:30)**: ETL Module triggers
-   - Downloads today's price data for all Nifty 50 stocks
+   - Downloads today's price data for all watchlist stocks (across all indices)
    - Updates Market Data tables
    - Fetches macro indicators (VIX, Crude, USD/INR)
 
 2. **Evening Analysis (17:00)**:
    - **AI Engine** activates: Reads new data, processes through Feature Store, runs predictions
-   - **Strategy Engine** activates: Reviews market data and AI predictions, generates "NEW" Trade Signals
+   - **Strategy Engine** activates: Runs index-specific strategies, reviews market data and AI predictions, generates "NEW" Trade Signals
 
 3. **Pre-Market (09:00 Next Day)**: Execution Engine wakes up
-   - Reads "NEW" signals
+   - Reads "NEW" signals (filtered by active index if specified)
    - Applies Risk Management rules
    - Places orders (Paper or Live)
 
@@ -109,14 +123,20 @@ The system functions autonomously day after day:
 
 After completing the initial run, your system will have:
 - ✅ Database initialized with all tables
-- ✅ 51 Nifty 50 stocks synced
-- ✅ Watchlist populated
+- ✅ 54+ NSE indices available (Nifty 50, 100, 500, Sectoral, Thematic, Strategy indices)
+- ✅ Companies synced for selected indices
+- ✅ Index-specific watchlists populated
 - ✅ 1 year of historical market data
 - ✅ Technical indicators calculated
 - ✅ Macro indicators (VIX, Crude, USD/INR) updated
 - ✅ ML features generated for all stocks
+- ✅ Index-specific strategies configured
 
-**Next Steps**: Train a model and start generating predictions!
+**Next Steps**: 
+1. Create all indices: Use "Create All NSE Indices" in dashboard or run `uv run python -m utils.discover_nse_indices`
+2. Sync companies for your target indices
+3. Create index-specific strategies
+4. Train a model and start generating predictions!
 
 ## 🚀 Getting Started
 
@@ -143,8 +163,20 @@ After completing the initial run, your system will have:
    ```bash
    # Using uv (recommended)
    uv run python init_db.py
-   uv run python -c "from engine.loaders.profile_loader import sync_nifty_companies; sync_nifty_companies()"
-   uv run python -m utils.watchlist_init
+   
+   # Create all NSE indices (54+ indices)
+   uv run python -m utils.discover_nse_indices
+   
+   # Sync companies for specific index (e.g., NIFTY_50)
+   uv run python -c "from engine.loaders.profile_loader import sync_index_companies; sync_index_companies('NIFTY_50')"
+   
+   # Or sync all available indices
+   uv run python -m utils.sync_all_indices
+   
+   # Initialize watchlist for an index
+   uv run python -m utils.watchlist_init NIFTY_50
+   
+   # Run ETL and generate features
    uv run python -m engine.etl
    uv run python -m ai.feature_store
    ```
@@ -162,23 +194,30 @@ After installation, run the initial setup to populate the database:
 # 1. Initialize database
 uv run python init_db.py
 
-# 2. Sync Nifty 50 companies
-uv run python -c "from engine.loaders.profile_loader import sync_nifty_companies; sync_nifty_companies()"
+# 2. Create all NSE indices (54+ indices)
+uv run python -m utils.discover_nse_indices
 
-# 3. Initialize watchlist
-uv run python -m utils.watchlist_init
+# 3. Sync companies for indices (example: NIFTY_50)
+uv run python -c "from engine.loaders.profile_loader import sync_index_companies; sync_index_companies('NIFTY_50')"
 
-# 4. Run ETL to fetch market data and calculate indicators
+# Or sync all available indices at once
+uv run python -m utils.sync_all_indices
+
+# 4. Initialize watchlist for an index
+uv run python -m utils.watchlist_init NIFTY_50
+
+# 5. Run ETL to fetch market data and calculate indicators
 uv run python -m engine.etl
 
-# 5. Generate ML features
+# 6. Generate ML features
 uv run python -m ai.feature_store
 ```
 
 This will:
 - Create all database tables
-- Sync 51 Nifty 50 stocks
-- Add all stocks to watchlist
+- Create 54+ NSE indices in database
+- Sync companies for selected indices (28 confirmed available on NSE)
+- Add stocks to index-specific watchlists
 - Fetch 1 year of historical market data
 - Calculate technical indicators (RSI, MACD, SMAs, ATR)
 - Fetch macro indicators (India VIX, Crude Oil, USD/INR)
@@ -296,7 +335,8 @@ uv run streamlit run dashboard.py
 │   ├── runner.py
 │   └── loaders/
 │       ├── price_loader.py
-│       └── profile_loader.py
+│       ├── profile_loader.py  # Company and index sync
+│       └── nse_index_discovery.py  # NSE index discovery
 ├── execution/               # Execution Engine
 │   ├── __init__.py
 │   ├── executor.py         # Order execution
@@ -307,13 +347,36 @@ uv run streamlit run dashboard.py
 │   ├── technical.py        # Technical analysis strategy
 │   ├── hybrid.py           # Hybrid strategy
 │   ├── registry.py         # Strategy discovery
-│   └── engine.py           # Strategy orchestrator
+│   └── engine.py           # Strategy orchestrator (index-aware)
+├── backtesting/            # Backtesting Module
+│   ├── __init__.py
+│   ├── engine.py           # Backtesting engine
+│   ├── models.py           # Backtest result models
+│   └── runner.py           # CLI for backtesting
+├── migrations/             # Database migrations
+│   ├── __init__.py
+│   ├── add_index_support.py
+│   ├── add_quantity_to_trade_signals.py
+│   └── add_missing_trade_signal_columns.py
+├── utils/                   # Utilities
+│   ├── __init__.py
+│   ├── watchlist_init.py   # Watchlist initialization
+│   ├── sync_all_indices.py # Index sync utility
+│   └── discover_nse_indices.py  # Index discovery
+├── migrations/             # Database migrations
+│   ├── __init__.py
+│   ├── add_index_support.py
+│   ├── add_quantity_to_trade_signals.py
+│   └── add_missing_trade_signal_columns.py
 ├── models/                  # Saved ML models (created at runtime)
 ├── dashboard.py             # Streamlit dashboard
 ├── orchestrator.py          # Main entry point
 ├── init_db.py              # Database initialization
+├── quick_start.py          # Quick setup script
+├── start_dashboard.py      # Dashboard starter
 ├── main.py                 # Legacy entry point
 ├── pyproject.toml          # Dependencies
+├── CHANGELOG.md            # Version history
 └── README.md               # This file
 ```
 
@@ -362,6 +425,72 @@ Change trading mode in `execution/executor.py`:
            }
    ```
 3. The system will automatically discover and load it!
+4. **Add Strategy Documentation**: Use the "Strategies" page in the dashboard to add detailed documentation for your strategy, including:
+   - How it works
+   - Entry/Exit conditions
+   - Risk management approach
+   - Recommended timeframe
+   - Assign it to specific indices
+
+## 📈 Multi-Index Support
+
+The system supports **54+ NSE indices** including:
+
+### Benchmark Indices
+- Nifty 50, 100, 200, 500
+- Nifty Total Market
+
+### Market Cap Based
+- Nifty LargeMidcap 250
+- Nifty Midcap 50, 100, 150, 250
+- Nifty Smallcap 50, 100, 250
+- Nifty Microcap 250
+
+### Sectoral Indices
+- Nifty Auto, Bank, Energy, FMCG, Healthcare, IT, Media, Metal, Pharma
+- Nifty PSU Bank, Private Bank, Realty
+- Nifty Consumer Durables, Oil & Gas, Infrastructure, Commodities
+
+### Thematic Indices
+- Nifty CPSE, MNC, Next 50, PSE
+- Nifty India Consumption, Digital, Manufacturing
+- Nifty Quality 30, Shariah 25
+- Nifty Tata Group, Mahindra Group, Aditya Birla Group
+
+### Strategy Indices
+- Nifty Alpha 50, High Beta 50, Low Volatility 50, Momentum 50
+- Nifty Quality Low Volatility 30
+- Nifty 50/100/500 Equal Weight
+
+### Managing Indices
+
+**Create All Indices**:
+```bash
+uv run python -m utils.discover_nse_indices
+```
+
+**Sync Companies for Indices**:
+```bash
+# Sync single index
+uv run python -c "from engine.loaders.profile_loader import sync_index_companies; sync_index_companies('NIFTY_50')"
+
+# Sync all available indices
+uv run python -m utils.sync_all_indices
+```
+
+**Via Dashboard**:
+- Go to Control Center → Index Management
+- Click "Create All NSE Indices" to create all 54+ indices
+- Select indices and click "Sync Selected Indices" to fetch companies
+- Use "Sync All Indices" to sync all available indices at once
+
+### Index-Specific Strategies
+
+Strategies can be configured for specific indices:
+- Each strategy can have different parameters per index
+- Strategy documentation is index-specific
+- Strategy Engine can run strategies for selected index only
+- Watchlists are index-specific
 
 ## 🛡️ Risk Management
 
@@ -376,11 +505,14 @@ The Execution Engine includes multiple risk checks:
 ## 📈 Monitoring
 
 Use the Streamlit Dashboard to:
+- **Manage Indices**: Create and sync companies for all NSE indices
+- **View Strategies**: Browse index-specific strategies with detailed documentation
 - Monitor portfolio performance
-- Review trade signals
+- Review trade signals (filtered by index)
 - Inspect AI predictions
-- Manage watchlist
+- Manage index-specific watchlists
 - Control model activation
+- **Backtest Strategies**: Test strategies on historical data with comprehensive metrics
 
 ## 🔐 Security Notes
 

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Text, Date, Boolean, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Text, Date, Boolean, JSON, Table
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime
 
@@ -11,6 +11,33 @@ DATABASE_URL = "sqlite:///stock_data.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, future=True)
 Base = declarative_base()
+
+# ==========================================
+# 0. INDEX DEFINITION (Stock Indices)
+# ==========================================
+class Index(Base):
+    """Stock indices like Nifty 50, Nifty 100, etc."""
+    __tablename__ = "indices"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, index=True)  # e.g., "NIFTY_50", "NIFTY_100", "NIFTY_500"
+    display_name = Column(String)  # e.g., "Nifty 50", "Nifty 100"
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    # Relationships
+    companies = relationship("CompanyProfile", secondary="company_index_mapping", back_populates="indices")
+    watchlists = relationship("Watchlist", back_populates="index")
+    strategy_metadata = relationship("StrategyMetadata", back_populates="index")
+
+# Junction table for many-to-many relationship between companies and indices
+company_index_mapping = Table(
+    'company_index_mapping',
+    Base.metadata,
+    Column('ticker', String, ForeignKey('company_profiles.ticker'), primary_key=True),
+    Column('index_id', Integer, ForeignKey('indices.id'), primary_key=True)
+)
 
 # ==========================================
 # 1. MASTER TABLE (The Hub)
@@ -34,6 +61,7 @@ class CompanyProfile(Base):
     watchlist_entries = relationship("Watchlist", back_populates="company")
     orders = relationship("Order", back_populates="company")
     portfolio_positions = relationship("Portfolio", back_populates="company")
+    indices = relationship("Index", secondary="company_index_mapping", back_populates="companies")
 
 # ==========================================
 # 2. TECHNICAL ANALYSIS (Price History)
@@ -123,6 +151,7 @@ class AIPredictions(Base):
     predicted_price = Column(Float)
     confidence_score = Column(Float)
     direction = Column(String)
+    index_id = Column(Integer, ForeignKey("indices.id"), nullable=True, index=True)  # Index isolation
     
     company = relationship("CompanyProfile", back_populates="predictions")
 
@@ -133,12 +162,17 @@ class Watchlist(Base):
     __tablename__ = "watchlist"
     
     id = Column(Integer, primary_key=True)
-    ticker = Column(String, ForeignKey("company_profiles.ticker"), unique=True, index=True)
+    ticker = Column(String, ForeignKey("company_profiles.ticker"), index=True)
+    index_id = Column(Integer, ForeignKey("indices.id"), index=True)
     added_at = Column(DateTime, default=datetime.now)
     is_active = Column(Boolean, default=True)
     notes = Column(Text)
     
     company = relationship("CompanyProfile", back_populates="watchlist_entries")
+    index = relationship("Index", back_populates="watchlists")
+    
+    # Unique constraint: a ticker can only appear once per index
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
 # ==========================================
 # 8. MACRO INDICATORS (External Factors)
@@ -213,6 +247,7 @@ class TradeSignal(Base):
     id = Column(Integer, primary_key=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
     ticker = Column(String, ForeignKey("company_profiles.ticker"), index=True)
+    index_id = Column(Integer, ForeignKey("indices.id"), nullable=True, index=True)  # Index isolation
     
     strategy_name = Column(String)
     signal = Column(String)  # "BUY", "SELL", "HOLD"
@@ -235,6 +270,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True)
     signal_id = Column(Integer, ForeignKey("trade_signals.id"), nullable=True)
     ticker = Column(String, ForeignKey("company_profiles.ticker"), index=True)
+    index_id = Column(Integer, ForeignKey("indices.id"), nullable=True, index=True)  # Index isolation
     
     order_type = Column(String)  # "MARKET", "LIMIT", "SL", "SL-M"
     side = Column(String)  # "BUY", "SELL"
@@ -262,7 +298,8 @@ class Portfolio(Base):
     __tablename__ = "portfolio"
     
     id = Column(Integer, primary_key=True)
-    ticker = Column(String, ForeignKey("company_profiles.ticker"), unique=True, index=True)
+    ticker = Column(String, ForeignKey("company_profiles.ticker"), index=True)
+    index_id = Column(Integer, ForeignKey("indices.id"), nullable=True, index=True)  # Index isolation
     
     quantity = Column(Integer)
     avg_entry_price = Column(Float)
@@ -282,6 +319,9 @@ class Portfolio(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
     
     company = relationship("CompanyProfile", back_populates="portfolio_positions")
+    
+    # Unique constraint: ticker + index_id must be unique (same ticker can be in different indices)
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
 # ==========================================
 # 14. BACKTEST RESULTS (Performance Analysis)
@@ -332,3 +372,43 @@ class BacktestTrade(Base):
     pnl = Column(Float)
     pnl_pct = Column(Float)
     exit_reason = Column(String)  # STOP_LOSS, TARGET, END_DATE
+
+# ==========================================
+# 15. STRATEGY METADATA (Strategy Documentation)
+# ==========================================
+class StrategyMetadata(Base):
+    """Stores strategy descriptions and documentation"""
+    __tablename__ = "strategy_metadata"
+    
+    id = Column(Integer, primary_key=True)
+    strategy_name = Column(String, index=True)  # Must match strategy class name
+    index_id = Column(Integer, ForeignKey("indices.id"), index=True)  # Index-specific strategy
+    display_name = Column(String)  # Human-readable name
+    description = Column(Text)  # Detailed description
+    category = Column(String)  # e.g., "Technical", "Fundamental", "Hybrid", "AI-Based"
+    
+    # Strategy parameters/configuration
+    parameters = Column(JSON, nullable=True)  # Store strategy-specific parameters
+    
+    # Performance characteristics
+    recommended_timeframe = Column(String)  # e.g., "Swing", "Day Trading", "Position"
+    risk_level = Column(String)  # e.g., "Low", "Medium", "High"
+    
+    # Documentation
+    how_it_works = Column(Text)  # How the strategy works
+    entry_conditions = Column(Text)  # When to enter
+    exit_conditions = Column(Text)  # When to exit
+    risk_management = Column(Text)  # Risk management approach
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    is_active = Column(Boolean, default=True)
+    author = Column(String, nullable=True)
+    version = Column(String, default="1.0")
+    
+    # Relationships
+    index = relationship("Index", back_populates="strategy_metadata")
+    
+    # Unique constraint: strategy_name + index_id must be unique
+    __table_args__ = ({"sqlite_autoincrement": True},)
