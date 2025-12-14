@@ -30,7 +30,7 @@ def get_session():
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.selectbox(
     "Choose a page",
-    ["Dashboard", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
+    ["Dashboard", "Control Center", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
 )
 
 # Main Dashboard
@@ -350,6 +350,247 @@ elif page == "Models":
     
     session.close()
 
+elif page == "Control Center":
+    st.title("🎮 Control Center")
+    st.markdown("**Control and execute all trading system workflows from here**")
+    
+    session = get_session()
+    
+    # System Status
+    st.subheader("📊 System Status")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_companies = session.scalar(select(func.count(CompanyProfile.id)))
+        st.metric("Companies", total_companies or 0)
+    
+    with col2:
+        total_market_data = session.scalar(select(func.count(MarketData.id)))
+        st.metric("Market Records", total_market_data or 0)
+    
+    with col3:
+        watchlist_count = session.scalar(select(func.count(Watchlist.id)).filter_by(is_active=True))
+        st.metric("Watchlist", watchlist_count or 0)
+    
+    with col4:
+        active_model = session.scalar(select(func.count(ModelRegistry.id)).filter_by(is_active=True))
+        st.metric("Active Models", active_model or 0)
+    
+    session.close()
+    
+    st.divider()
+    
+    # Workflow Controls
+    st.subheader("🔄 Workflow Controls")
+    
+    # ETL Section
+    with st.expander("📥 ETL - Data Collection", expanded=True):
+        st.markdown("**Fetch market data, macro indicators, and calculate technical indicators**")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info("This will sync market data for all watchlist stocks, fetch macro indicators (VIX, Crude, USD/INR), and calculate technical indicators.")
+        with col2:
+            if st.button("🔄 Run ETL", key="etl_btn", use_container_width=True):
+                with st.spinner("Running ETL Pipeline... This may take a few minutes."):
+                    try:
+                        from engine.etl import ETLModule
+                        etl = ETLModule()
+                        etl.run_full_sync()
+                        st.success("✅ ETL Pipeline completed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ ETL failed: {str(e)}")
+    
+    # Feature Generation
+    with st.expander("🔧 Feature Generation"):
+        st.markdown("**Generate ML-ready features for all stocks**")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info("Transforms raw market data into machine learning features (RSI, MACD, momentum, etc.)")
+        with col2:
+            if st.button("🔧 Generate Features", key="features_btn", use_container_width=True):
+                with st.spinner("Generating features for all stocks..."):
+                    try:
+                        from ai.feature_store import FeatureStoreEngine
+                        engine = FeatureStoreEngine()
+                        engine.generate_all_features()
+                        st.success("✅ Features generated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Feature generation failed: {str(e)}")
+    
+    # Model Training
+    with st.expander("🤖 Model Training"):
+        st.markdown("**Train a new AI model**")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            model_name = st.text_input("Model Name", value="RandomForest_Swing_v1", key="model_name")
+            auto_activate = st.checkbox("Activate after training", value=False)
+        with col2:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            if st.button("🎓 Train Model", key="train_btn", use_container_width=True):
+                with st.spinner(f"Training model {model_name}... This may take several minutes."):
+                    try:
+                        from ai.train_model import ModelTrainer
+                        trainer = ModelTrainer()
+                        model = trainer.train_random_forest(model_name)
+                        if model:
+                            if auto_activate:
+                                trainer.activate_model(model_name)
+                                st.success(f"✅ Model {model_name} trained and activated!")
+                            else:
+                                st.success(f"✅ Model {model_name} trained successfully!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Model training failed. Check logs for details.")
+                    except Exception as e:
+                        st.error(f"❌ Training failed: {str(e)}")
+    
+    # AI Inference
+    with st.expander("🧠 AI Inference"):
+        st.markdown("**Generate predictions using the active AI model**")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info("Runs the active model to generate price predictions for all watchlist stocks")
+        with col2:
+            if st.button("🧠 Run Inference", key="inference_btn", use_container_width=True):
+                with st.spinner("Running AI inference... Generating predictions..."):
+                    try:
+                        from ai.inference import InferenceEngine
+                        engine = InferenceEngine()
+                        engine.run_daily_inference()
+                        st.success("✅ AI Inference completed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Inference failed: {str(e)}")
+    
+    # Strategy Engine
+    with st.expander("⚖️ Strategy Engine"):
+        st.markdown("**Generate trade signals using all active strategies**")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info("Runs all registered strategies to generate BUY/SELL signals based on technical, fundamental, and AI analysis")
+        with col2:
+            if st.button("⚖️ Generate Signals", key="strategy_btn", use_container_width=True):
+                with st.spinner("Running strategy engine... Analyzing stocks..."):
+                    try:
+                        from strategies.engine import StrategyEngine
+                        engine = StrategyEngine()
+                        engine.run_daily_analysis()
+                        st.success("✅ Strategy Engine completed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Strategy engine failed: {str(e)}")
+    
+    # Execution Engine
+    with st.expander("💼 Execution Engine"):
+        st.markdown("**Execute trade signals with risk management**")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            mode = st.radio("Trading Mode", ["PAPER", "LIVE"], key="exec_mode", horizontal=True)
+            st.warning("⚠️ LIVE mode will execute real trades. Use with caution!")
+        with col2:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            if st.button("💼 Execute Trades", key="execute_btn", use_container_width=True):
+                with st.spinner("Processing trade signals..."):
+                    try:
+                        from execution.executor import ExecutionEngine
+                        engine = ExecutionEngine(mode=mode)
+                        engine.process_new_signals()
+                        engine.update_portfolio_prices()
+                        engine.close()
+                        st.success(f"✅ Execution completed in {mode} mode!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Execution failed: {str(e)}")
+    
+    # Full Workflow
+    st.divider()
+    st.subheader("🚀 Full Workflow")
+    st.markdown("**Run the complete trading workflow in sequence**")
+    
+    workflow_steps = st.multiselect(
+        "Select workflow steps:",
+        ["ETL", "Features", "Inference", "Strategy", "Execution"],
+        default=["ETL", "Features", "Inference", "Strategy", "Execution"]
+    )
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.info("This will run all selected steps in sequence. Make sure you have a trained and activated model for inference.")
+    with col2:
+        if st.button("🚀 Run Full Workflow", key="full_workflow_btn", use_container_width=True, type="primary"):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            steps_completed = 0
+            total_steps = len(workflow_steps)
+            
+            try:
+                # ETL
+                if "ETL" in workflow_steps:
+                    status_text.text("Step 1/{}: Running ETL...".format(total_steps))
+                    from engine.etl import ETLModule
+                    etl = ETLModule()
+                    etl.run_full_sync()
+                    steps_completed += 1
+                    progress_bar.progress(steps_completed / total_steps)
+                
+                # Features
+                if "Features" in workflow_steps:
+                    status_text.text("Step {}/{}: Generating features...".format(steps_completed + 1, total_steps))
+                    from ai.feature_store import FeatureStoreEngine
+                    engine = FeatureStoreEngine()
+                    engine.generate_all_features()
+                    steps_completed += 1
+                    progress_bar.progress(steps_completed / total_steps)
+                
+                # Inference
+                if "Inference" in workflow_steps:
+                    status_text.text("Step {}/{}: Running AI inference...".format(steps_completed + 1, total_steps))
+                    from ai.inference import InferenceEngine
+                    engine = InferenceEngine()
+                    engine.run_daily_inference()
+                    steps_completed += 1
+                    progress_bar.progress(steps_completed / total_steps)
+                
+                # Strategy
+                if "Strategy" in workflow_steps:
+                    status_text.text("Step {}/{}: Generating signals...".format(steps_completed + 1, total_steps))
+                    from strategies.engine import StrategyEngine
+                    engine = StrategyEngine()
+                    engine.run_daily_analysis()
+                    steps_completed += 1
+                    progress_bar.progress(steps_completed / total_steps)
+                
+                # Execution
+                if "Execution" in workflow_steps:
+                    status_text.text("Step {}/{}: Executing trades...".format(steps_completed + 1, total_steps))
+                    from execution.executor import ExecutionEngine
+                    engine = ExecutionEngine(mode="PAPER")
+                    engine.process_new_signals()
+                    engine.update_portfolio_prices()
+                    engine.close()
+                    steps_completed += 1
+                    progress_bar.progress(1.0)
+                
+                status_text.text("✅ All steps completed!")
+                st.success("🎉 Full workflow completed successfully!")
+                st.balloons()
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Workflow failed at step {steps_completed + 1}: {str(e)}")
+                progress_bar.progress(0)
+
 elif page == "Settings":
     st.title("⚙️ Settings")
     
@@ -364,25 +605,35 @@ elif page == "Settings":
     st.metric("Total Companies", total_companies)
     st.metric("Total Market Data Records", total_market_data)
     
-    # Manual triggers
-    st.subheader("Manual Triggers")
+    # Quick Actions
+    st.subheader("Quick Actions")
+    st.info("💡 Use the **Control Center** page (in the sidebar) to execute all workflows and control the system.")
     
-    col1, col2, col3 = st.columns(3)
+    st.markdown("**Navigate to Control Center from the sidebar menu above** ⬆️")
     
-    with col1:
-        if st.button("🔄 Run ETL"):
-            st.info("ETL triggered (check logs)")
-            # In production, this would trigger the ETL module
+    st.divider()
     
-    with col2:
-        if st.button("🧠 Run AI Inference"):
-            st.info("AI Inference triggered (check logs)")
-            # In production, this would trigger the inference engine
+    # System Information
+    st.subheader("System Information")
     
-    with col3:
-        if st.button("⚖️ Run Strategy Engine"):
-            st.info("Strategy Engine triggered (check logs)")
-            # In production, this would trigger the strategy engine
+    # Latest data timestamps
+    latest_market_data = session.scalar(
+        select(func.max(MarketData.date))
+    )
+    if latest_market_data:
+        st.write(f"**Latest Market Data**: {latest_market_data.strftime('%Y-%m-%d %H:%M')}")
+    
+    latest_prediction = session.scalar(
+        select(func.max(AIPredictions.generated_at))
+    )
+    if latest_prediction:
+        st.write(f"**Latest AI Prediction**: {latest_prediction.strftime('%Y-%m-%d %H:%M')}")
+    
+    latest_signal = session.scalar(
+        select(func.max(TradeSignal.created_at))
+    )
+    if latest_signal:
+        st.write(f"**Latest Trade Signal**: {latest_signal.strftime('%Y-%m-%d %H:%M')}")
     
     session.close()
 
