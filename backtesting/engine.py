@@ -36,10 +36,12 @@ class BacktestResult:
 class BacktestEngine:
     """Engine for backtesting trading strategies"""
     
-    def __init__(self, initial_capital: float = 100000.0):
+    def __init__(self, initial_capital: float = 100000.0, index_id: Optional[int] = None, index_name: Optional[str] = None):
         self.session = SessionLocal()
         self.initial_capital = initial_capital
-        self.strategy_registry = StrategyRegistry()
+        self.index_id = index_id
+        self.index_name = index_name
+        self.strategy_registry = StrategyRegistry(index_id=index_id, index_name=index_name)
     
     def run_backtest(
         self, 
@@ -86,6 +88,25 @@ class BacktestEngine:
             logger.warning(f"Insufficient data for {ticker}")
             return result
         
+        # Remove duplicates by date (keep the latest entry for each date)
+        from datetime import date
+        seen_dates = {}
+        for md in market_data:
+            date_key = md.date if isinstance(md.date, date) else md.date.date()
+            if date_key not in seen_dates:
+                seen_dates[date_key] = md
+            else:
+                # Compare dates properly - keep the later one
+                existing_md = seen_dates[date_key]
+                existing_date = existing_md.date if isinstance(existing_md.date, date) else existing_md.date.date()
+                current_date = md.date if isinstance(md.date, date) else md.date.date()
+                if current_date >= existing_date:
+                    seen_dates[date_key] = md
+        
+        market_data = list(seen_dates.values())
+        # Sort by date to maintain order
+        market_data.sort(key=lambda x: x.date)
+        
         # Convert to DataFrame for easier processing
         df = pd.DataFrame([{
             'date': md.date,
@@ -96,8 +117,17 @@ class BacktestEngine:
             'volume': md.volume
         } for md in market_data])
         
+        # Remove duplicate dates (keep the last entry for each date)
+        if df['date'].duplicated().any():
+            df = df.drop_duplicates(subset='date', keep='last')
+        
         df.set_index('date', inplace=True)
         df.sort_index(inplace=True)
+        
+        # Ensure index is unique (final check)
+        if df.index.duplicated().any():
+            logger.warning(f"{ticker}: Duplicate indices in backtest data, removing duplicates")
+            df = df[~df.index.duplicated(keep='last')]
         
         # Simulate trading
         capital = self.initial_capital
@@ -209,7 +239,12 @@ class BacktestEngine:
                     if len(historical_df) < 50:  # Need enough data for indicators
                         continue
                     
-                    # Calculate indicators
+                    # For AI strategies, they need enough historical data for feature calculation
+                    # Most strategies need at least 30-50 days of data
+                    if len(historical_df) < 50:
+                        continue
+                    
+                    # Calculate indicators for fallback strategies
                     import pandas_ta as ta
                     historical_df['RSI'] = ta.rsi(historical_df['close'], length=14)
                     macd_data = ta.macd(historical_df['close'])
@@ -220,7 +255,7 @@ class BacktestEngine:
                     historical_df['SMA_200'] = ta.sma(historical_df['close'], length=200)
                     historical_df['ATR'] = ta.atr(historical_df['high'], historical_df['low'], historical_df['close'], length=14)
                     
-                    # Get latest values
+                    # Get latest values for fallback strategies
                     latest = historical_df.iloc[-1]
                     rsi = latest['RSI'] if pd.notna(latest['RSI']) else None
                     macd = latest['MACD'] if pd.notna(latest['MACD']) else None
@@ -229,72 +264,94 @@ class BacktestEngine:
                     sma_200 = latest['SMA_200'] if pd.notna(latest['SMA_200']) else None
                     atr = latest['ATR'] if pd.notna(latest['ATR']) else None
                     
-                    # Generate signal based on strategy type
+                    # Generate signal using strategy's generate_signal method
+                    # Note: For AI strategies, this will query the database for historical data
+                    # The strategy should work as long as the historical data is in the database
                     signal = None
                     stop_loss = None
                     target_price = None
+                    quantity = None
                     
-                    if strategy_name == "Technical_RSI_MACD":
-                        # Technical strategy logic
-                        if rsi and rsi < 30 and macd and macd_signal and macd > macd_signal:
-                            signal = "BUY"
-                        elif rsi and rsi > 70 and macd and macd_signal and macd < macd_signal:
-                            signal = "SELL"
+                    try:
+                        # Use strategy's generate_signal method (works for all strategies including AI_Signal_Strategy)
+                        signal_data = strategy.generate_signal(ticker)
                         
-                        if signal and atr:
-                            atr_multiplier = 2.0
-                            stop_loss_pct = (atr * atr_multiplier) / current_price
-                            if signal == "BUY":
-                                stop_loss = current_price * (1 - stop_loss_pct)
-                                target_price = current_price * (1 + stop_loss_pct * 2)
-                            else:
-                                stop_loss = current_price * (1 + stop_loss_pct)
-                                target_price = current_price * (1 - stop_loss_pct * 2)
+                        if signal_data:
+                            signal = signal_data.get("signal")
+                            stop_loss = signal_data.get("stop_loss")
+                            target_price = signal_data.get("target_price")
+                            quantity = signal_data.get("quantity")
+                            
+                            # If strategy didn't provide quantity, calculate it
+                            if not quantity:
+                                position_value = capital * position_size_pct
+                                quantity = int(position_value / current_price)
+                    except Exception as e:
+                        # Fallback to hardcoded logic for legacy strategies
+                        logger.debug(f"Strategy generate_signal failed, using fallback: {e}")
+                        
+                        if strategy_name == "Technical_RSI_MACD":
+                            # Technical strategy logic
+                            if rsi and rsi < 30 and macd and macd_signal and macd > macd_signal:
+                                signal = "BUY"
+                            elif rsi and rsi > 70 and macd and macd_signal and macd < macd_signal:
+                                signal = "SELL"
+                            
+                            if signal and atr:
+                                atr_multiplier = 2.0
+                                stop_loss_pct = (atr * atr_multiplier) / current_price
+                                if signal == "BUY":
+                                    stop_loss = current_price * (1 - stop_loss_pct)
+                                    target_price = current_price * (1 + stop_loss_pct * 2)
+                                else:
+                                    stop_loss = current_price * (1 + stop_loss_pct)
+                                    target_price = current_price * (1 - stop_loss_pct * 2)
+                        
+                        elif strategy_name == "Hybrid_AI_Technical_Fundamental":
+                            # Hybrid strategy - simplified for backtesting (no AI, no fundamentals)
+                            buy_score = 0
+                            sell_score = 0
+                            
+                            if rsi:
+                                if rsi < 35:
+                                    buy_score += 50  # Higher weight without AI
+                                elif rsi > 65:
+                                    sell_score += 50
+                            
+                            if macd and macd_signal:
+                                if macd > macd_signal:
+                                    buy_score += 25
+                                else:
+                                    sell_score += 25
+                            
+                            if sma_50 and sma_200:
+                                if current_price > sma_50 > sma_200:
+                                    buy_score += 25
+                                elif current_price < sma_50 < sma_200:
+                                    sell_score += 25
+                            
+                            threshold = 50  # Lower threshold without AI
+                            if buy_score >= threshold:
+                                signal = "BUY"
+                            elif sell_score >= threshold:
+                                signal = "SELL"
+                            
+                            if signal and atr:
+                                atr_multiplier = 2.0
+                                stop_loss_pct = (atr * atr_multiplier) / current_price
+                                if signal == "BUY":
+                                    stop_loss = current_price * (1 - stop_loss_pct)
+                                    target_price = current_price * (1 + stop_loss_pct * 2)
+                                else:
+                                    stop_loss = current_price * (1 + stop_loss_pct)
+                                    target_price = current_price * (1 - stop_loss_pct * 2)
+                        
+                        # Calculate quantity if not provided
+                        if signal and stop_loss and target_price and not quantity:
+                            position_value = capital * position_size_pct
+                            quantity = int(position_value / current_price)
                     
-                    elif strategy_name == "Hybrid_AI_Technical_Fundamental":
-                        # Hybrid strategy - simplified for backtesting (no AI, no fundamentals)
-                        buy_score = 0
-                        sell_score = 0
-                        
-                        if rsi:
-                            if rsi < 35:
-                                buy_score += 50  # Higher weight without AI
-                            elif rsi > 65:
-                                sell_score += 50
-                        
-                        if macd and macd_signal:
-                            if macd > macd_signal:
-                                buy_score += 25
-                            else:
-                                sell_score += 25
-                        
-                        if sma_50 and sma_200:
-                            if current_price > sma_50 > sma_200:
-                                buy_score += 25
-                            elif current_price < sma_50 < sma_200:
-                                sell_score += 25
-                        
-                        threshold = 50  # Lower threshold without AI
-                        if buy_score >= threshold:
-                            signal = "BUY"
-                        elif sell_score >= threshold:
-                            signal = "SELL"
-                        
-                        if signal and atr:
-                            atr_multiplier = 2.0
-                            stop_loss_pct = (atr * atr_multiplier) / current_price
-                            if signal == "BUY":
-                                stop_loss = current_price * (1 - stop_loss_pct)
-                                target_price = current_price * (1 + stop_loss_pct * 2)
-                            else:
-                                stop_loss = current_price * (1 + stop_loss_pct)
-                                target_price = current_price * (1 - stop_loss_pct * 2)
-                    
-                    if signal and stop_loss and target_price:
-                        # Calculate position size
-                        position_value = capital * position_size_pct
-                        quantity = int(position_value / current_price)
-                        
+                    if signal and stop_loss and target_price and quantity:
                         if quantity > 0:
                             capital_used = current_price * quantity
                             position = {

@@ -16,6 +16,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Index performance comparison tools
 - Sector rotation strategies
 
+## [0.3.0] - 2025-12-14
+
+### Added
+- **AI Signal Generation Models** (2025-12-14)
+  - Signal Classifier model for BUY/SELL/HOLD predictions
+  - Return Predictor model for expected percentage return
+  - Target Price Predictor model for future price targets
+  - Index-specific model training (e.g., SignalClassifier_NIFTY50_v1)
+  - Composite AI Signal Strategy that uses all three models together
+  - Model training script (`train_signal_models.py`) with index support
+  - Profit potential calculator for risk-reward analysis
+  - Enhanced feature engineering with 2490+ features per sample
+
+- **Index-Specific Model Management** (2025-12-14)
+  - Added `index_id` to ModelRegistry table for model isolation
+  - Models are now filtered by index in dashboard
+  - Migration script to populate index_id for existing models
+  - Models only visible for their specific index
+
+- **Historical Data Loading Utility** (2025-12-14)
+  - Parameterized data loading with `years`, `start_date`, `end_date` support
+  - Index-specific data loading (`utils/load_historical_data.py`)
+  - Convenience function for Nifty 50 5-year data loading
+  - Supports flexible backtesting data preparation
+
+- **Enhanced Feature Engineering** (2025-12-14)
+  - Advanced feature calculation with lag features, rolling statistics
+  - Cross-asset features and pattern detection
+  - Support for sequence features for time-series models
+  - Comprehensive feature set (2490 features per sample)
+
+### Fixed
+- **Duplicate Index Error Fixes** (2025-12-14)
+  - Fixed "cannot reindex on an axis with duplicate labels" error in all modules
+  - Added duplicate date handling in ETL market data sync
+  - Fixed duplicate handling in technical indicators calculation
+  - Fixed duplicate handling in feature store generation
+  - Fixed duplicate handling in enhanced features for AI strategies
+  - Fixed duplicate handling in backtesting engine
+  - All modules now properly handle duplicate dates from database
+
+- **AI Signal Strategy Fixes** (2025-12-14)
+  - Fixed Bollinger Bands unpacking error (returns DataFrame, not tuple)
+  - Fixed XGBoost API compatibility (moved early_stopping_rounds to constructor)
+  - Added LabelEncoder for string to numeric label conversion
+  - Fixed feature dimension validation
+  - Enhanced error logging and diagnostics
+
+- **Backtesting Improvements** (2025-12-14)
+  - Fixed backtesting engine to pass index information to strategies
+  - Updated backtesting to use strategy's generate_signal method
+  - Fixed AI Signal Strategy to work in backtesting context
+  - Added proper error handling for feature generation during backtesting
+
+- **ETL Module Fixes** (2025-12-14)
+  - Fixed ambiguous truth value error in market data sync
+  - Added multi-index column handling for yfinance data
+  - Fixed Series to scalar conversion for price/volume values
+  - Improved date comparison logic
+
+### Changed
+- **Model Registry** (2025-12-14)
+  - `register_model()` now accepts `index_id` parameter
+  - Models are stored with index association
+  - Dashboard Models page filters by selected index
+
+- **AI Signal Strategy** (2025-12-14)
+  - Automatically uses all three models (SignalClassifier, ReturnPredictor, TargetPricePredictor)
+  - No individual model activation needed - composite strategy approach
+  - Loads index-specific models automatically
+  - Falls back to generic models if index-specific not available
+
+- **Dashboard Updates** (2025-12-14)
+  - Models page now shows index-specific models only
+  - Added note about composite strategy not needing activation
+  - Enhanced ETL page with individual data zone refresh controls
+
 ## [0.2.0] - 2025-12-14
 
 ### Added

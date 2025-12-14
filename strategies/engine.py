@@ -21,8 +21,17 @@ class StrategyEngine:
             index_name: Optional index name (e.g., "NIFTY_50"). If None, processes all indices.
         """
         self.session = SessionLocal()
-        self.registry = StrategyRegistry()
         self.index_name = index_name
+        
+        # Get index_id if index_name is provided
+        index_id = None
+        if index_name:
+            index = self.session.scalar(select(Index).filter_by(name=index_name, is_active=True))
+            if index:
+                index_id = index.id
+        
+        # Initialize registry with index information
+        self.registry = StrategyRegistry(index_id=index_id, index_name=index_name)
     
     def run_daily_analysis(self, index_name: Optional[str] = None):
         """

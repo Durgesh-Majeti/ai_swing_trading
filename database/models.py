@@ -199,11 +199,15 @@ class ModelRegistry(Base):
     version = Column(String)
     model_type = Column(String)  # e.g., "LSTM", "XGBoost", "RandomForest"
     file_path = Column(String)  # Path to saved model file
+    index_id = Column(Integer, ForeignKey("indices.id"), nullable=True, index=True)  # Index-specific models
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     trained_on_date = Column(Date)
     performance_metrics = Column(JSON)  # Store metrics like accuracy, MAE, etc.
     description = Column(Text)
+    
+    # Relationship
+    index = relationship("Index", backref="models")
 
 # ==========================================
 # 10. FEATURE STORE (ML Features)

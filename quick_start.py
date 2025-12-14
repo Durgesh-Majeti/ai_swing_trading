@@ -43,8 +43,8 @@ def quick_start():
     logger.info("="*60)
     logger.info("Note: This will fetch company data from NSE")
     try:
-        from engine.loaders.profile_loader import sync_nifty_companies
-        sync_nifty_companies()
+        from engine.loaders.profile_loader import sync_index_companies
+        sync_index_companies("NIFTY_50")
     except Exception as e:
         logger.error(f"Failed: {e}")
         return

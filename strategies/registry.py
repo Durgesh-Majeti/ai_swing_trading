@@ -7,14 +7,24 @@ import inspect
 from pathlib import Path
 from strategies.base import BaseStrategy
 from loguru import logger
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 class StrategyRegistry:
     """Manages strategy discovery and loading"""
     
-    def __init__(self, strategies_dir: str = "strategies"):
+    def __init__(self, strategies_dir: str = "strategies", index_id: Optional[int] = None, index_name: Optional[str] = None):
+        """
+        Initialize Strategy Registry
+        
+        Args:
+            strategies_dir: Directory containing strategy files
+            index_id: Optional index ID to pass to index-aware strategies
+            index_name: Optional index name to pass to index-aware strategies
+        """
         self.strategies_dir = Path(strategies_dir)
         self.strategies: Dict[str, BaseStrategy] = {}
+        self.index_id = index_id
+        self.index_name = index_name
         self._discover_strategies()
     
     def _discover_strategies(self):
@@ -36,8 +46,21 @@ class StrategyRegistry:
                         obj != BaseStrategy and 
                         obj.__module__ == module_name):
                         
-                        # Instantiate strategy
-                        strategy = obj()
+                        # Check if strategy accepts index_id or index_name
+                        sig = inspect.signature(obj.__init__)
+                        params = sig.parameters
+                        
+                        # Instantiate strategy with index info if supported
+                        if 'index_id' in params or 'index_name' in params:
+                            kwargs = {}
+                            if 'index_id' in params:
+                                kwargs['index_id'] = self.index_id
+                            if 'index_name' in params:
+                                kwargs['index_name'] = self.index_name
+                            strategy = obj(**kwargs)
+                        else:
+                            strategy = obj()
+                        
                         self.strategies[strategy.name] = strategy
                         logger.success(f"✅ Loaded strategy: {strategy.name}")
                         

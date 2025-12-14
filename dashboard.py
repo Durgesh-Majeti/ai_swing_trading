@@ -122,7 +122,7 @@ session.close()
 
 page = st.sidebar.selectbox(
     "Choose a page",
-    ["Dashboard", "Control Center", "Backtesting", "Strategies", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
+    ["Dashboard", "ETL", "Control Center", "Backtesting", "Strategies", "Portfolio", "Signals", "AI Predictions", "Watchlist", "Models", "Settings"]
 )
 
 # Main Dashboard
@@ -215,6 +215,244 @@ if page == "Dashboard":
         st.info("No recent orders" + (f" for {selected_index.display_name}" if selected_index else ""))
     
     session.close()
+
+elif page == "ETL":
+    if selected_index:
+        st.title(f"📥 {selected_index.display_name} - ETL Data Management")
+        st.info(f"📊 Managing data for: **{selected_index.display_name}**")
+    else:
+        st.title("📥 ETL Data Management")
+        st.info("📊 Managing data for: **All Indices**")
+    
+    st.markdown("**Extract, Transform, and Load data from various sources. Refresh individual data zones as needed.**")
+    
+    session = get_session()
+    
+    # Get ETL statistics
+    from engine.etl import ETLModule
+    index_id = selected_index.id if selected_index else None
+    index_name = selected_index_name if selected_index_name else None
+    etl = ETLModule(index_id=index_id, index_name=index_name)
+    
+    try:
+        stats = etl.get_zone_statistics()
+        
+        # Display Zone Statistics
+        st.subheader("📊 Data Zone Statistics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Market Data Records", f"{stats['market_data']['count']:,}")
+            if stats['market_data']['latest_date']:
+                st.caption(f"Latest: {stats['market_data']['latest_date'].date()}")
+        
+        with col2:
+            st.metric("Technical Indicators", f"{stats['technical_indicators']['count']:,}")
+        
+        with col3:
+            st.metric("Macro Indicators", f"{stats['macro_indicators']['count']:,}")
+            if stats['macro_indicators']['latest_date']:
+                st.caption(f"Latest: {stats['macro_indicators']['latest_date'].date()}")
+        
+        with col4:
+            st.metric("Feature Store", f"{stats['feature_store']['count']:,}")
+        
+        st.divider()
+        
+        # Zone Refresh Controls
+        st.subheader("🔄 Zone Refresh Controls")
+        
+        # Market Data Zone
+        with st.expander("📈 Market Data Zone", expanded=True):
+            st.markdown("**Fetch daily OHLCV (Open, High, Low, Close, Volume) data for stocks**")
+            
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                index_info = f" for **{selected_index.display_name}**" if selected_index else " for **All Indices**"
+                st.info(f"Downloads historical price data from Yahoo Finance{index_info}")
+                
+                # Historical data options
+                data_period = st.radio(
+                    "Data Period",
+                    ["Latest (1 year)", "5 years", "Custom Date Range"],
+                    horizontal=True,
+                    key="market_data_period"
+                )
+                
+                if data_period == "Custom Date Range":
+                    col_start, col_end = st.columns(2)
+                    with col_start:
+                        start_date = st.date_input("Start Date", value=datetime.now().date() - timedelta(days=365))
+                    with col_end:
+                        end_date = st.date_input("End Date", value=datetime.now().date())
+                else:
+                    start_date = None
+                    end_date = None
+                    years = 5.0 if data_period == "5 years" else 1.0
+            
+            with col2:
+                force_refresh = st.checkbox("Force Refresh", value=False, help="Re-download all data even if it exists")
+            
+            with col3:
+                if st.button("🔄 Refresh Market Data", key="refresh_market_data", use_container_width=True, type="primary"):
+                    with st.spinner("Fetching market data... This may take a few minutes."):
+                        try:
+                            if data_period == "Custom Date Range":
+                                etl.sync_market_data(
+                                    start_date=start_date,
+                                    end_date=end_date,
+                                    force_refresh=force_refresh
+                                )
+                            else:
+                                etl.sync_market_data(
+                                    years=years,
+                                    force_refresh=force_refresh
+                                )
+                            st.success("✅ Market data refreshed successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to refresh market data: {str(e)}")
+        
+        # Technical Indicators Zone
+        with st.expander("📊 Technical Indicators Zone", expanded=False):
+            st.markdown("**Calculate and store technical indicators (RSI, MACD, SMA, ATR, etc.)**")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                index_info = f" for **{selected_index.display_name}**" if selected_index else " for **All Indices**"
+                st.info(f"Calculates technical indicators from market data{index_info}. Requires sufficient historical data (200+ days).")
+            
+            with col2:
+                if st.button("🔄 Calculate Indicators", key="refresh_indicators", use_container_width=True):
+                    with st.spinner("Calculating technical indicators..."):
+                        try:
+                            etl.calculate_technical_indicators()
+                            st.success("✅ Technical indicators calculated successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to calculate indicators: {str(e)}")
+        
+        # Macro Indicators Zone
+        with st.expander("🌍 Macro Indicators Zone", expanded=False):
+            st.markdown("**Fetch macro-economic indicators (VIX, Crude Oil, USD/INR)**")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.info("Downloads latest macro indicators. These are global indicators (not index-specific).")
+            
+            with col2:
+                if st.button("🔄 Refresh Macro Indicators", key="refresh_macro", use_container_width=True):
+                    with st.spinner("Fetching macro indicators..."):
+                        try:
+                            etl.sync_macro_indicators()
+                            st.success("✅ Macro indicators refreshed successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to refresh macro indicators: {str(e)}")
+        
+        # Feature Store Zone
+        with st.expander("🔧 Feature Store Zone", expanded=False):
+            st.markdown("**Generate ML-ready features from raw data**")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                index_info = f" for **{selected_index.display_name}**" if selected_index else " for **All Indices**"
+                st.info(f"Transforms raw market data into machine learning features{index_info}. Required for AI model training and inference.")
+            
+            with col2:
+                if st.button("🔄 Generate Features", key="refresh_features", use_container_width=True):
+                    with st.spinner("Generating features..."):
+                        try:
+                            from ai.feature_store import FeatureStoreEngine
+                            feature_engine = FeatureStoreEngine(index_id=index_id)
+                            feature_engine.generate_all_features()
+                            feature_engine.close()
+                            st.success("✅ Features generated successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to generate features: {str(e)}")
+        
+        st.divider()
+        
+        # Full ETL Pipeline
+        st.subheader("🚀 Full ETL Pipeline")
+        st.markdown("**Run complete ETL pipeline (all zones in sequence)**")
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            index_info = f" for **{selected_index.display_name}**" if selected_index else " for **All Indices**"
+            st.info(f"This will run all ETL steps in sequence{index_info}: Market Data → Technical Indicators → Macro Indicators")
+            
+            # Options for full pipeline
+            pipeline_period = st.radio(
+                "Data Period",
+                ["Latest (1 year)", "5 years", "Custom Date Range"],
+                horizontal=True,
+                key="pipeline_period"
+            )
+            
+            if pipeline_period == "Custom Date Range":
+                col_start, col_end = st.columns(2)
+                with col_start:
+                    pipeline_start = st.date_input("Start Date", value=datetime.now().date() - timedelta(days=365), key="pipeline_start")
+                with col_end:
+                    pipeline_end = st.date_input("End Date", value=datetime.now().date(), key="pipeline_end")
+            else:
+                pipeline_start = None
+                pipeline_end = None
+                pipeline_years = 5.0 if pipeline_period == "5 years" else None
+        
+        with col2:
+            pipeline_force = st.checkbox("Force Refresh", value=False, key="pipeline_force")
+            st.write("")  # Spacing
+            if st.button("🚀 Run Full ETL", key="run_full_etl", use_container_width=True, type="primary"):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                try:
+                    # Step 1: Market Data
+                    status_text.text("Step 1/3: Fetching market data...")
+                    if pipeline_period == "Custom Date Range":
+                        etl.sync_market_data(
+                            start_date=pipeline_start,
+                            end_date=pipeline_end,
+                            force_refresh=pipeline_force
+                        )
+                    else:
+                        etl.sync_market_data(
+                            years=pipeline_years,
+                            force_refresh=pipeline_force
+                        )
+                    progress_bar.progress(1/3)
+                    
+                    # Step 2: Technical Indicators
+                    status_text.text("Step 2/3: Calculating technical indicators...")
+                    etl.calculate_technical_indicators()
+                    progress_bar.progress(2/3)
+                    
+                    # Step 3: Macro Indicators
+                    status_text.text("Step 3/3: Fetching macro indicators...")
+                    etl.sync_macro_indicators()
+                    progress_bar.progress(1.0)
+                    
+                    status_text.text("✅ ETL Pipeline Complete!")
+                    st.success("🎉 Full ETL pipeline completed successfully!")
+                    st.balloons()
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ ETL pipeline failed: {str(e)}")
+                    progress_bar.progress(0)
+        
+    finally:
+        etl.session.close()
+        session.close()
 
 elif page == "Portfolio":
     if selected_index:
@@ -490,17 +728,27 @@ elif page == "Watchlist":
     session.close()
 
 elif page == "Models":
-    st.title("🤖 AI Models")
+    if selected_index:
+        st.title(f"🤖 {selected_index.display_name} - AI Models")
+        st.info(f"📊 Showing models for: **{selected_index.display_name}**")
+    else:
+        st.title("🤖 AI Models")
+        st.info("📊 Showing models for: **All Indices**")
     
     session = get_session()
     
-    models = session.scalars(select(ModelRegistry)).all()
+    # Filter models by index if selected
+    if selected_index:
+        models = session.scalars(select(ModelRegistry).filter_by(index_id=selected_index.id)).all()
+    else:
+        models = session.scalars(select(ModelRegistry)).all()
     
     if models:
         models_data = [{
             "Name": m.model_name,
             "Type": m.model_type,
             "Version": m.version,
+            "Index": m.index.display_name if m.index else "Generic",
             "Active": "✅" if m.is_active else "❌",
             "Created": m.created_at.strftime("%Y-%m-%d"),
             "Description": m.description or ""
@@ -509,19 +757,14 @@ elif page == "Models":
         df = pd.DataFrame(models_data)
         st.dataframe(df, use_container_width=True)
         
-        # Activate model
-        st.subheader("Activate Model")
-        model_names = [m.model_name for m in models]
-        selected_model = st.selectbox("Select model to activate", model_names)
+        # Note about composite strategy
+        st.info("💡 **Note**: The AI_Signal_Strategy automatically uses all three models (SignalClassifier, ReturnPredictor, TargetPricePredictor) together. No individual activation needed!")
         
-        if st.button("✅ Activate Model"):
-            from ai.model_registry import ModelRegistryManager
-            registry = ModelRegistryManager()
-            if registry.activate_model(selected_model):
-                st.success(f"Model {selected_model} activated")
-                st.rerun()
     else:
-        st.info("No models registered")
+        if selected_index:
+            st.info(f"No models registered for {selected_index.display_name}")
+        else:
+            st.info("No models registered")
     
     session.close()
 
@@ -719,6 +962,7 @@ elif page == "Control Center":
     
     # Workflow Controls
     st.subheader("🔄 Workflow Controls")
+    st.info("💡 **Note**: ETL operations have been moved to the dedicated **ETL** page. Use that page to refresh data zones individually.")
     
     # Show index context
     if selected_index:
@@ -727,27 +971,6 @@ elif page == "Control Center":
         st.warning("⚠️ **No index selected** - Workflows will run for **All Indices**. Select an index from the sidebar to limit operations to a specific index.")
     
     st.divider()
-    
-    # ETL Section
-    with st.expander("📥 ETL - Data Collection", expanded=True):
-        st.markdown("**Fetch market data, macro indicators, and calculate technical indicators**")
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            index_info = f" for **{selected_index.display_name}**" if selected_index else " for **All Indices**"
-            st.info(f"This will sync market data for watchlist stocks{index_info}, fetch macro indicators (VIX, Crude, USD/INR), and calculate technical indicators.")
-        with col2:
-            if st.button("🔄 Run ETL", key="etl_btn", use_container_width=True):
-                with st.spinner("Running ETL Pipeline... This may take a few minutes."):
-                    try:
-                        from engine.etl import ETLModule
-                        index_id = selected_index.id if selected_index else None
-                        etl = ETLModule(index_id=index_id)
-                        etl.run_full_sync()
-                        st.success("✅ ETL Pipeline completed successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ ETL failed: {str(e)}")
     
     # Feature Generation
     with st.expander("🔧 Feature Generation"):
@@ -901,12 +1124,13 @@ elif page == "Control Center":
             try:
                 # Get index_id for all workflows
                 index_id = selected_index.id if selected_index else None
+                index_name = selected_index_name if selected_index_name else None
                 
                 # ETL
                 if "ETL" in workflow_steps:
                     status_text.text("Step 1/{}: Running ETL...".format(total_steps))
                     from engine.etl import ETLModule
-                    etl = ETLModule(index_id=index_id)
+                    etl = ETLModule(index_id=index_id, index_name=index_name)
                     etl.run_full_sync()
                     steps_completed += 1
                     progress_bar.progress(steps_completed / total_steps)
@@ -1171,7 +1395,15 @@ elif page == "Backtesting":
             try:
                 from backtesting.engine import BacktestEngine
                 
-                engine = BacktestEngine(initial_capital=initial_capital)
+                # Pass index information for index-aware strategies like AI_Signal_Strategy
+                index_id = selected_index.id if selected_index else None
+                index_name = selected_index.name if selected_index else None
+                
+                engine = BacktestEngine(
+                    initial_capital=initial_capital,
+                    index_id=index_id,
+                    index_name=index_name
+                )
                 result = engine.run_backtest(
                     selected_strategy,
                     selected_ticker,

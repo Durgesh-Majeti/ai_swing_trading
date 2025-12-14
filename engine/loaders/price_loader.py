@@ -1,3 +1,8 @@
+"""
+DEPRECATED: This module is deprecated. Use engine.etl.ETLModule instead.
+This file is kept for backward compatibility only.
+"""
+
 import yfinance as yf
 from database.models import SessionLocal, CompanyProfile, MarketData
 from sqlalchemy import select
@@ -7,6 +12,11 @@ import json
 from datetime import datetime
 
 def sync_price_history():
+    """
+    DEPRECATED: Use engine.etl.ETLModule.sync_market_data() instead.
+    This function is kept for backward compatibility only.
+    """
+    logger.warning("⚠️  sync_price_history() is deprecated. Use engine.etl.ETLModule.sync_market_data() instead.")
     # #region agent log
     log_path = r"d:\Python Projects\Indian Stock Analysis\.cursor\debug.log"
     with open(log_path, "a", encoding="utf-8") as f:

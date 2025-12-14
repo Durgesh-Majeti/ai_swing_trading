@@ -19,7 +19,7 @@ class ModelRegistryManager:
         self.models_dir.mkdir(exist_ok=True)
     
     def register_model(self, model_name: str, model_type: str, model_object, 
-                      performance_metrics: dict = None, description: str = ""):
+                      performance_metrics: dict = None, description: str = "", index_id: int = None):
         """Register a new model in the registry"""
         try:
             # Save model to disk
@@ -36,7 +36,8 @@ class ModelRegistryManager:
                 version=version,
                 model_type=model_type,
                 file_path=str(model_path),
-                is_active=False,  # New models are inactive by default
+                index_id=index_id,  # Store index_id for index-specific filtering
+                is_active=False,  # New models are inactive by default (composite strategy doesn't need activation)
                 trained_on_date=datetime.now().date(),
                 performance_metrics=json.dumps(performance_metrics) if performance_metrics else None,
                 description=description
@@ -110,5 +111,12 @@ class ModelRegistryManager:
     def get_model_info(self, model_name: str):
         """Get information about a specific model"""
         stmt = select(ModelRegistry).filter_by(model_name=model_name)
+        return self.session.scalars(stmt).first()
+    
+    def get_model(self, model_name: str):
+        """Get a model by name (returns registry entry)"""
+        stmt = select(ModelRegistry).filter_by(model_name=model_name).order_by(
+            ModelRegistry.trained_on_date.desc()
+        )
         return self.session.scalars(stmt).first()
 

@@ -10,7 +10,7 @@ from database.models import (
 )
 from sqlalchemy import select, func
 from loguru import logger
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
 import pandas_ta as ta
 
@@ -36,6 +36,17 @@ class FeatureStoreEngine:
                 logger.warning(f"Insufficient data for {ticker}")
                 return None
             
+            # Remove duplicates by date (keep the latest entry for each date)
+            seen_dates = {}
+            for md in market_data:
+                date_key = md.date if isinstance(md.date, date) else md.date.date()
+                if date_key not in seen_dates or md.date > seen_dates[date_key].date:
+                    seen_dates[date_key] = md
+            
+            market_data = list(seen_dates.values())
+            # Sort by date to maintain order
+            market_data.sort(key=lambda x: x.date)
+            
             # Convert to DataFrame
             df = pd.DataFrame([{
                 'date': md.date,
@@ -46,8 +57,18 @@ class FeatureStoreEngine:
                 'volume': md.volume
             } for md in market_data])
             
+            # Remove duplicate dates (keep the last entry for each date)
+            if df['date'].duplicated().any():
+                logger.debug(f"{ticker}: Found duplicate dates, keeping last entry for each date")
+                df = df.drop_duplicates(subset='date', keep='last')
+            
             df.set_index('date', inplace=True)
             df.sort_index(inplace=True)
+            
+            # Ensure index is unique (final check)
+            if df.index.duplicated().any():
+                logger.warning(f"{ticker}: Duplicate indices after processing, removing duplicates")
+                df = df[~df.index.duplicated(keep='last')]
             
             # Calculate technical features
             df['log_return'] = np.log(df['close'] / df['close'].shift(1))
@@ -215,10 +236,16 @@ class FeatureStoreEngine:
         for company in companies:
             self.generate_features(company.ticker)
         
-        self.session.close()
         logger.success("✅ Feature generation complete")
+    
+    def close(self):
+        """Close database session"""
+        if hasattr(self, 'session') and self.session:
+            self.session.close()
+            self.session = None
 
 if __name__ == "__main__":
     engine = FeatureStoreEngine()
     engine.generate_all_features()
+    engine.close()
 
